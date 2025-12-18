@@ -45,31 +45,31 @@ namespace CompanionGearUpgrades
 
         private void AddDialogs(CampaignGameStarter starter)
         {
-            // 1) Entrée depuis le menu principal -> on va vers une réplique NPC
+            // 1) Entry from the main menu -> go to an NPC reply
             starter.AddPlayerLine(
                 "cgu_open",
                 "hero_main_options",
                 "cgu_role_npc",
-                "{=cgu_open}Augmenter votre équipement",
+                "{=cgu_open}Upgrade your equipment",
                 IsTalkingToPlayerCompanion,
                 null,
                 100);
 
-            // 2) NPC pose la question -> menu de choix (player options)
+            // 2) NPC asks the question -> choice menu (player options)
             starter.AddDialogLine(
                 "cgu_role_npc_line",
                 "cgu_role_npc",
                 "cgu_role_player",
-                "{=cgu_role}Quel style d’équipement ?",
+                "{=cgu_role}What equipment style?",
                 null,
                 null);
 
-            // 3) Choix du rôle -> on passe par un état NPC puis on arrive au menu tier
+            // 3) Role choice -> go through an NPC state then reach the tier menu
             starter.AddPlayerLine(
                 "cgu_role_infantry",
                 "cgu_role_player",
                 "cgu_tier_npc",
-                "{=cgu_role_infantry}Soldat (infanterie)",
+                "{=cgu_role_infantry}Soldier (infantry)",
                 () => true,
                 () => _selectedRole = GearRole.Infantry);
 
@@ -85,16 +85,16 @@ namespace CompanionGearUpgrades
                 "cgu_role_lancer",
                 "cgu_role_player",
                 "cgu_tier_npc",
-                "{=cgu_role_lancer}Lancier (cavalerie)",
+                "{=cgu_role_lancer}Lancer (cavalry)",
                 () => true,
                 () => _selectedRole = GearRole.Lancer);
 
-            // Retour depuis le menu rôle -> passe par NPC -> hero_main_options
+            // Back from the role menu -> go through an NPC state -> hero_main_options
             starter.AddPlayerLine(
                 "cgu_back_from_role",
                 "cgu_role_player",
                 "cgu_back_main_npc",
-                "{=cgu_back}Retour",
+                "{=cgu_back}Back",
                 () => true,
                 null);
 
@@ -102,25 +102,25 @@ namespace CompanionGearUpgrades
                 "cgu_back_main_npc_line",
                 "cgu_back_main_npc",
                 "hero_main_options",
-                "{=cgu_back_main}Très bien.",
+                "{=cgu_back_main}Alright.",
                 null,
                 null);
 
-            // 4) NPC introduit le menu de choix de rang
+            // 4) NPC introduces the tier selection menu
             starter.AddDialogLine(
                 "cgu_tier_npc_line",
                 "cgu_tier_npc",
                 "cgu_tier_player",
-                "{=cgu_tier}Choisis un rang (tu paies en or).",
+                "{=cgu_tier}Choose a tier (you pay in gold).",
                 null,
                 null);
 
-            // 5) Choix du tier -> on va vers un état NPC "résultat" puis retour au menu principal
+            // 5) Tier choice -> go to an NPC "result" state then return to the main menu
             starter.AddPlayerLine(
                 "cgu_tier_1",
                 "cgu_tier_player",
                 "cgu_apply_npc",
-                "{=cgu_t1}Rang 1",
+                "{=cgu_t1}Tier 1",
                 () => true,
                 () => TryApplyTier(1));
 
@@ -128,7 +128,7 @@ namespace CompanionGearUpgrades
                 "cgu_tier_2",
                 "cgu_tier_player",
                 "cgu_apply_npc",
-                "{=cgu_t2}Rang 2",
+                "{=cgu_t2}Tier 2",
                 () => true,
                 () => TryApplyTier(2));
 
@@ -136,25 +136,25 @@ namespace CompanionGearUpgrades
                 "cgu_tier_3",
                 "cgu_tier_player",
                 "cgu_apply_npc",
-                "{=cgu_t3}Rang 3",
+                "{=cgu_t3}Tier 3",
                 () => true,
                 () => TryApplyTier(3));
 
-            // NPC "ack" après application -> retour au menu principal
+            // NPC "ack" after applying -> return to the main menu
             starter.AddDialogLine(
                 "cgu_apply_npc_line",
                 "cgu_apply_npc",
                 "hero_main_options",
-                "{=cgu_done}D’accord.",
+                "{=cgu_done}Okay.",
                 null,
                 null);
 
-            // Retour depuis le menu tier -> passe par NPC -> menu rôle
+            // Back from the tier menu -> go through an NPC state -> role menu
             starter.AddPlayerLine(
                 "cgu_back_from_tier",
                 "cgu_tier_player",
                 "cgu_back_role_npc",
-                "{=cgu_back2}Retour",
+                "{=cgu_back2}Back",
                 () => true,
                 null);
 
@@ -162,7 +162,7 @@ namespace CompanionGearUpgrades
                 "cgu_back_role_npc_line",
                 "cgu_back_role_npc",
                 "cgu_role_player",
-                "{=cgu_back_role}Très bien.",
+                "{=cgu_back_role}Alright.",
                 null,
                 null);
         }
@@ -182,14 +182,14 @@ namespace CompanionGearUpgrades
 
             if (!_presets.TryGetValue((_selectedRole, tier), out var preset))
             {
-                InformationManager.DisplayMessage(new InformationMessage($"[CGU] Preset manquant pour {_selectedRole} T{tier}."));
+                InformationManager.DisplayMessage(new InformationMessage($"[CGU] Missing preset for {_selectedRole} T{tier}."));
                 return;
             }
 
             int cost = preset.Cost;
             if (Hero.MainHero.Gold < cost)
             {
-                InformationManager.DisplayMessage(new InformationMessage($"Pas assez d’or. Il faut {cost}."));
+                InformationManager.DisplayMessage(new InformationMessage($"Not enough gold. You need {cost}."));
                 return;
             }
 
@@ -202,7 +202,7 @@ namespace CompanionGearUpgrades
             Hero.MainHero.ChangeHeroGold(-cost);
             EquipmentHelper.AssignHeroEquipmentFromEquipment(target, newEquipment);
 
-            InformationManager.DisplayMessage(new InformationMessage($"{target.Name}: équipement mis à jour (Rang {tier}) pour {cost} or."));
+            InformationManager.DisplayMessage(new InformationMessage($"{target.Name}: equipment updated (Tier {tier}) for {cost} gold."));
         }
 
         private bool TryBuildEquipment(Hero target, GearPreset preset, out Equipment equipment, out string error)
@@ -232,7 +232,7 @@ namespace CompanionGearUpgrades
                         catch (Exception ex)
                         {
                             InformationManager.DisplayMessage(new InformationMessage(
-                                $"[CGU] Impossible de transférer l'ancien item du slot {slot} : {ex.Message}"
+                                $"[CGU] Unable to transfer the old item from slot {slot}: {ex.Message}"
                             ));
                         }
                     }
@@ -242,7 +242,7 @@ namespace CompanionGearUpgrades
                 var item = MBObjectManager.Instance.GetObject<ItemObject>(itemId);
                 if (item == null)
                 {
-                    error = $"[CGU] Item introuvable: '{itemId}'. Vérifie l’ID (vanilla/War Sails/mods).";
+                    error = $"[CGU] Item not found: '{itemId}'. Check the ID (vanilla/War Sails/mods).";
                     equipment = null;
                     return false;
                 }
@@ -290,7 +290,7 @@ namespace CompanionGearUpgrades
                     [EquipmentIndex.Weapon3] = "large_adarga",
                 }),
 
-                // INFANTERIE
+                // INFANTRY
                 [(GearRole.Infantry, 1)] = new GearPreset(2500, new Dictionary<EquipmentIndex, string>
                 {
                     [EquipmentIndex.Weapon0] = "battania_sword_4_t4",
@@ -328,7 +328,7 @@ namespace CompanionGearUpgrades
                     [EquipmentIndex.Leg] = "fine_town_boots",
                 }),
 
-                // CAVALERIE (LANCIER)
+                // CAVALRY (LANCER)
                 [(GearRole.Lancer, 1)] = new GearPreset(6000, new Dictionary<EquipmentIndex, string>
                 {
                     [EquipmentIndex.Horse] = "aserai_horse",
