@@ -1,8 +1,10 @@
-﻿using System;
+﻿using Helpers;
+using System;
 using System.Collections.Generic;
-using Helpers;
 using TaleWorlds.CampaignSystem;
 using TaleWorlds.CampaignSystem.Conversation;
+using TaleWorlds.CampaignSystem.Party;
+using TaleWorlds.CampaignSystem.Roster;
 using TaleWorlds.Core;
 using TaleWorlds.Library;
 using TaleWorlds.ObjectSystem;
@@ -209,10 +211,33 @@ namespace CompanionGearUpgrades
 
             equipment = target.BattleEquipment.Clone();
 
+            MobileParty mainParty = MobileParty.MainParty;
+            ItemRoster playerRoster = (mainParty != null) ? mainParty.ItemRoster : null;
+
             foreach (var kv in preset.Slots)
             {
                 EquipmentIndex slot = kv.Key;
                 string itemId = kv.Value;
+
+                if (playerRoster != null)
+                {
+                    EquipmentElement oldElement = target.BattleEquipment.GetEquipmentFromSlot(slot);
+
+                    if (!oldElement.IsEmpty && !oldElement.IsQuestItem && !oldElement.IsInvalid())
+                    {
+                        try
+                        {
+                            playerRoster.AddToCounts(new EquipmentElement(oldElement), 1);
+                        }
+                        catch (Exception ex)
+                        {
+                            InformationManager.DisplayMessage(new InformationMessage(
+                                $"[CGU] Impossible de transférer l'ancien item du slot {slot} : {ex.Message}"
+                            ));
+                        }
+                    }
+                }
+
 
                 var item = MBObjectManager.Instance.GetObject<ItemObject>(itemId);
                 if (item == null)
@@ -222,7 +247,6 @@ namespace CompanionGearUpgrades
                     return false;
                 }
 
-                // met l’item dans le slot
                 equipment.AddEquipmentToSlotWithoutAgent(slot, new EquipmentElement(item));
             }
 
@@ -231,9 +255,6 @@ namespace CompanionGearUpgrades
 
         private static Dictionary<(GearRole, int), GearPreset> BuildPresets()
         {
-            // Tu peux remplacer ces IDs par tes choix.
-            // Sources d’IDs utiles : “Bannerlord item names and IDs” + “NPC default equipment”.
-            // (liens donnés dans la réponse)
 
             return new Dictionary<(GearRole, int), GearPreset>
             {
