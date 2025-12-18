@@ -1,6 +1,6 @@
-﻿using TaleWorlds.MountAndBlade;
-using TaleWorlds.CampaignSystem;
+﻿using TaleWorlds.CampaignSystem;
 using TaleWorlds.Core;
+using TaleWorlds.MountAndBlade;
 
 namespace CompanionGearUpgrades
 {
@@ -8,12 +8,6 @@ namespace CompanionGearUpgrades
     {
         protected override void OnGameStart(Game game, IGameStarter gameStarterObject)
         {
-            //if (game.GameType is not Campaign) return;
-
-            //if (gameStarterObject is CampaignGameStarter starter)
-            //{
-            //    starter.AddBehavior(new CompanionGearUpgradeBehavior());
-            //}
 
             var starter = gameStarterObject as CampaignGameStarter;
             if (starter == null)

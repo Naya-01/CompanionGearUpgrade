@@ -2,11 +2,11 @@
 using System;
 using System.Collections.Generic;
 using TaleWorlds.CampaignSystem;
-using TaleWorlds.CampaignSystem.Conversation;
 using TaleWorlds.CampaignSystem.Party;
 using TaleWorlds.CampaignSystem.Roster;
 using TaleWorlds.Core;
 using TaleWorlds.Library;
+using TaleWorlds.Localization;
 using TaleWorlds.ObjectSystem;
 
 namespace CompanionGearUpgrades
@@ -117,27 +117,27 @@ namespace CompanionGearUpgrades
 
             // 5) Tier choice -> go to an NPC "result" state then return to the main menu
             starter.AddPlayerLine(
-                "cgu_tier_1",
-                "cgu_tier_player",
-                "cgu_apply_npc",
-                "{=cgu_t1}Tier 1",
-                () => true,
-                () => TryApplyTier(1));
+               "cgu_tier_1",
+               "cgu_tier_player",
+               "cgu_apply_npc",
+               "{=cgu_t1}Tier 1 ({COST_T1} gold)",
+               () => SetTierCostVar(1, "COST_T1"),
+               () => TryApplyTier(1));
 
             starter.AddPlayerLine(
                 "cgu_tier_2",
                 "cgu_tier_player",
                 "cgu_apply_npc",
-                "{=cgu_t2}Tier 2",
-                () => true,
+                "{=cgu_t2}Tier 2 ({COST_T2} gold)",
+                () => SetTierCostVar(2, "COST_T2"),
                 () => TryApplyTier(2));
 
             starter.AddPlayerLine(
                 "cgu_tier_3",
                 "cgu_tier_player",
                 "cgu_apply_npc",
-                "{=cgu_t3}Tier 3",
-                () => true,
+                "{=cgu_t3}Tier 3 ({COST_T3} gold)",
+                () => SetTierCostVar(3, "COST_T3"),
                 () => TryApplyTier(3));
 
             // NPC "ack" after applying -> return to the main menu
@@ -374,6 +374,19 @@ namespace CompanionGearUpgrades
                 }),
             };
         }
+        private bool SetTierCostVar(int tier, string varName)
+        {
+            GearPreset preset;
+            if (_presets.TryGetValue((_selectedRole, tier), out preset))
+            {
+                MBTextManager.SetTextVariable(varName, preset.Cost);
+                return true;
+            }
+
+            MBTextManager.SetTextVariable(varName, "-");
+            return false;
+        }
+
     }
 
     public sealed class GearPreset
