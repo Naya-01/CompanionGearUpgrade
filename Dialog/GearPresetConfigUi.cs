@@ -4,9 +4,7 @@ using CompanionGearUpgrades.Services;
 using Helpers;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using TaleWorlds.CampaignSystem;
-using TaleWorlds.CampaignSystem.Inventory;
 using TaleWorlds.CampaignSystem.Party;
 using TaleWorlds.CampaignSystem.Roster;
 using TaleWorlds.Core;
@@ -18,7 +16,8 @@ namespace CompanionGearUpgrades.Dialog
 {
     /// <summary>
     /// Small dynamic configuration UI using only Inquiry windows (no custom Gauntlet).
-    /// The flow is: Role -> Tier -> Editor menu (Price / Armors / Weapons / Horse) -> Save/Cancel.
+    /// Flow: Role -> Tier -> Editor (Categories) -> Pick slot -> Inventory picker -> back to same category.
+    /// Exit -> Save / Cancel -> return to conversation root.
     /// </summary>
     public sealed class GearPresetConfigUi
     {
@@ -37,41 +36,59 @@ namespace CompanionGearUpgrades.Dialog
         private readonly CompanionGearUpgradeService _service;
         private readonly GearPresetOverrides _overrides;
 
+        // Called when we fully exit the config UI (after Save/Cancel, or Cancel from Role selection).
+        private readonly Action _returnToConversationRoot;
+
         private GearRole _role;
         private int _tier;
 
         // Session state (Cancel discards, Save commits)
         private GearPresetSnapshot _working;
 
-        // Cache to avoid rebuilding huge lists every time
-        private readonly Dictionary<InventoryItemType, List<ItemObject>> _cachedItemsByType = new Dictionary<InventoryItemType, List<ItemObject>>();
+        // If you came from a category menu (Armors/Weapons/Horse), we store where to go back after the inventory picker closes.
+        private Action _returnAfterPicker;
 
+        // Cache to avoid rebuilding huge lists every time
+        private readonly Dictionary<InventoryItemType, List<ItemObject>> _cachedItemsByType =
+            new Dictionary<InventoryItemType, List<ItemObject>>();
 
         private static readonly EquipmentIndex[] _allEditableSlots =
         {
+            EquipmentIndex.Weapon0,
+            EquipmentIndex.Weapon1,
+            EquipmentIndex.Weapon2,
+            EquipmentIndex.Weapon3,
             EquipmentIndex.Head,
             EquipmentIndex.Body,
             EquipmentIndex.Cape,
             EquipmentIndex.Gloves,
             EquipmentIndex.Leg,
-            EquipmentIndex.Weapon0,
-            EquipmentIndex.Weapon1,
-            EquipmentIndex.Weapon2,
-            EquipmentIndex.Weapon3,
             EquipmentIndex.Horse,
             EquipmentIndex.HorseHarness,
         };
 
-        public GearPresetConfigUi(CompanionGearUpgradeService service, GearPresetOverrides overrides)
+        public GearPresetConfigUi(CompanionGearUpgradeService service, GearPresetOverrides overrides, Action returnToConversationRoot)
         {
             _service = service;
             _overrides = overrides;
+            _returnToConversationRoot = returnToConversationRoot;
         }
 
         public void Open()
         {
             ShowRoleSelection();
         }
+
+        private void ExitToConversationRoot()
+        {
+            _working = null;
+            _returnAfterPicker = null;
+            _returnToConversationRoot?.Invoke();
+        }
+
+        /* ============================================================
+         * ROLE / TIER
+         * ============================================================ */
 
         private void ShowRoleSelection()
         {
@@ -100,7 +117,8 @@ namespace CompanionGearUpgrades.Dialog
                     },
                     _ =>
                     {
-                        // Cancel -> close
+                        // Cancel -> back to conversation root
+                        ExitToConversationRoot();
                     },
                     "",
                     false
@@ -161,9 +179,10 @@ namespace CompanionGearUpgrades.Dialog
             if (_working == null)
                 return;
 
+            _returnAfterPicker = null;
             string summary =
-                $"Role: {_role}" +$"| Tier: {_tier} " + $"| Cost: {_working.Cost} \n" +
-                BuildSlotSummary(_working) +
+                $"Role: {_role} | Tier: {_tier} | Cost: {_working.Cost}\n" +
+                "Choose what to edit.\n" +
                 "Exit -> Save / Cancel";
 
             var options = new List<InquiryElement>
@@ -171,22 +190,26 @@ namespace CompanionGearUpgrades.Dialog
                 new InquiryElement("cost", "Set price (gold)", null),
                 new InquiryElement("armors", "Armors", null),
                 new InquiryElement("weapons", "Weapons", null),
-                new InquiryElement("horse", "Horse", null),
-                new InquiryElement("reset", "Reset this tier to default", null),
+                new InquiryElement("reset", "Reset this tier to default", null), // keep it the last one !
             };
+
+            if (_role == GearRole.Lancer)
+            {
+                options[options.Count - 1] = new InquiryElement("horse", "Horse", null);
+                options.Add(new InquiryElement("reset", "Reset this tier to default", null));
+            }
 
             MBInformationManager.ShowMultiSelectionInquiry(new MultiSelectionInquiryData(
                 "CGU - Edit Preset",
                 summary,
                 options,
-                true,  // isExitShown -> affiche le X en haut à droite
-                0,     // minSelectableOptionCount -> IMPORTANT: permet de quitter sans sélection
-                1,     // maxSelectableOptionCount
+                true,   // isExitShown
+                0,      // minSelectableOptionCount (allow exit without selection)
+                1,      // maxSelectableOptionCount
                 "Select",
                 "Exit",
                 list =>
                 {
-                    // Comme min=0, on valide nous-mêmes
                     if (list == null || list.Count == 0)
                     {
                         InformationManager.DisplayMessage(new InformationMessage("[CGU] Select an option first."));
@@ -205,27 +228,135 @@ namespace CompanionGearUpgrades.Dialog
                         if (s == "reset") { ResetWorkingToDefault(); ShowEditMenu(); return; }
                     }
 
-                    PromptSetItem_FromEditMenu((EquipmentIndex)id);
+                    ShowEditMenu();
                 },
                 _ =>
                 {
-                    // Exit / X -> on affiche enfin Save / Cancel
+                    // Exit / X -> show Save / Cancel, and then return to conversation root.
                     ShowSaveCancelDialog();
                 },
                 "",
-                false // isSeachAvailable
+                false // search not needed here
             ));
         }
 
-        private string BuildSlotSummary(GearPresetSnapshot snap)
+        private void ShowArmorMenu()
         {
-            if (snap.Slots == null || snap.Slots.Count == 0)
-                return "Slots: (none)\n";
+            if (_working == null)
+                return;
 
-            string lines = "Slots:\n";
-            foreach (var kv in snap.Slots)
-                lines += $" - {kv.Key}: {kv.Value}\n";
-            return lines;
+            var options = new List<InquiryElement>
+            {
+                new InquiryElement(EquipmentIndex.Head, $"Head: {FormatItem(GetSlotIdOrEmpty(EquipmentIndex.Head))}", null),
+                new InquiryElement(EquipmentIndex.Body, $"Body: {FormatItem(GetSlotIdOrEmpty(EquipmentIndex.Body))}", null),
+                new InquiryElement(EquipmentIndex.Cape, $"Cape: {FormatItem(GetSlotIdOrEmpty(EquipmentIndex.Cape))}", null),
+                new InquiryElement(EquipmentIndex.Gloves, $"Gloves: {FormatItem(GetSlotIdOrEmpty(EquipmentIndex.Gloves))}", null),
+                new InquiryElement(EquipmentIndex.Leg, $"Legs: {FormatItem(GetSlotIdOrEmpty(EquipmentIndex.Leg))}", null),
+            };
+
+            MBInformationManager.ShowMultiSelectionInquiry(new MultiSelectionInquiryData(
+                "CGU - Armors",
+                "Pick a slot (you will choose the item in the Inventory screen).",
+                options,
+                true,
+                1,
+                1,
+                "Select",
+                "Back",
+                selected =>
+                {
+                    // Remember category so we return here after inventory picker closes.
+                    _returnAfterPicker = ShowArmorMenu;
+                    PromptSetItem_FromEditMenu((EquipmentIndex)selected[0].Identifier);
+                },
+                _ =>
+                {
+                    _returnAfterPicker = null;
+                    ShowEditMenu();
+                },
+                "",
+                true // search is useful here (names)
+            ));
+        }
+
+        private void ShowWeaponMenu()
+        {
+            if (_working == null)
+                return;
+
+            var options = new List<InquiryElement>
+            {
+                new InquiryElement(EquipmentIndex.Weapon0, $"Weapon0: {FormatItem(GetSlotIdOrEmpty(EquipmentIndex.Weapon0))}", null),
+                new InquiryElement(EquipmentIndex.Weapon1, $"Weapon1: {FormatItem(GetSlotIdOrEmpty(EquipmentIndex.Weapon1))}", null),
+                new InquiryElement(EquipmentIndex.Weapon2, $"Weapon2: {FormatItem(GetSlotIdOrEmpty(EquipmentIndex.Weapon2))}", null),
+                new InquiryElement(EquipmentIndex.Weapon3, $"Weapon3: {FormatItem(GetSlotIdOrEmpty(EquipmentIndex.Weapon3))}", null),
+            };
+
+            MBInformationManager.ShowMultiSelectionInquiry(new MultiSelectionInquiryData(
+                "CGU - Weapons",
+                "Pick a slot (you will choose the item in the Inventory screen).",
+                options,
+                true,
+                1,
+                1,
+                "Select",
+                "Back",
+                selected =>
+                {
+                    _returnAfterPicker = ShowWeaponMenu;
+                    PromptSetItem_FromEditMenu((EquipmentIndex)selected[0].Identifier);
+                },
+                _ =>
+                {
+                    _returnAfterPicker = null;
+                    ShowEditMenu();
+                },
+                "",
+                true
+            ));
+        }
+
+        private void ShowHorseMenu()
+        {
+            if (_working == null)
+                return;
+
+            var options = new List<InquiryElement>
+            {
+                new InquiryElement(EquipmentIndex.Horse, $"Horse: {FormatItem(GetSlotIdOrEmpty(EquipmentIndex.Horse))}", null),
+                new InquiryElement(EquipmentIndex.HorseHarness, $"Harness: {FormatItem(GetSlotIdOrEmpty(EquipmentIndex.HorseHarness))}", null),
+            };
+
+            MBInformationManager.ShowMultiSelectionInquiry(new MultiSelectionInquiryData(
+                "CGU - Horse",
+                "Pick a slot (you will choose the item in the Inventory screen).",
+                options,
+                true,
+                1,
+                1,
+                "Select",
+                "Back",
+                selected =>
+                {
+                    _returnAfterPicker = ShowHorseMenu;
+                    PromptSetItem_FromEditMenu((EquipmentIndex)selected[0].Identifier);
+                },
+                _ =>
+                {
+                    _returnAfterPicker = null;
+                    ShowEditMenu();
+                },
+                "",
+                true
+            ));
+        }
+
+        private string GetSlotIdOrEmpty(EquipmentIndex slot)
+        {
+            if (_working == null || _working.Slots == null)
+                return "";
+
+            return _working.Slots.TryGetValue(slot, out var id) ? (id ?? "") : "";
         }
 
         private void ResetWorkingToDefault()
@@ -265,7 +396,6 @@ namespace CompanionGearUpgrades.Dialog
             ));
         }
 
-
         private void PromptSetItem_FromEditMenu(EquipmentIndex slot)
         {
             if (_working == null)
@@ -273,7 +403,8 @@ namespace CompanionGearUpgrades.Dialog
 
             OpenInventoryPickerForSlot(slot, () =>
             {
-                ShowEditMenu();
+                Action back = _returnAfterPicker ?? (Action)ShowEditMenu;
+                back();
             });
         }
 
@@ -298,7 +429,7 @@ namespace CompanionGearUpgrades.Dialog
         {
             if (_working == null)
             {
-                ShowTierSelection();
+                ExitToConversationRoot();
                 return;
             }
 
@@ -312,16 +443,17 @@ namespace CompanionGearUpgrades.Dialog
                 () =>
                 {
                     CommitAndClose();
-                    ShowTierSelection();
+                    ExitToConversationRoot();
                 },
                 () =>
                 {
                     // Cancel -> discard the working session
                     _working = null;
-                    ShowTierSelection();
+                    ExitToConversationRoot();
                 }
             ));
         }
+
         private void OpenInventoryPickerForSlot(EquipmentIndex slot, Action onClosed)
         {
             if (_working == null)
@@ -374,7 +506,7 @@ namespace CompanionGearUpgrades.Dialog
                 }
                 else
                 {
-                    InformationManager.DisplayMessage(new InformationMessage("[CGU] No item selected. Move one item from the left to your inventory/equipment, then press Done."));
+                    InformationManager.DisplayMessage(new InformationMessage("[CGU] No item selected. Move one item from the left, then press Done."));
                 }
 
                 onClosed?.Invoke();
@@ -492,7 +624,6 @@ namespace CompanionGearUpgrades.Dialog
                 list.Add(item);
             }
 
-            // Stable sorting (UI is easier to navigate)
             list.Sort((a, b) =>
             {
                 int n = string.Compare(a.Name.ToString(), b.Name.ToString(), StringComparison.OrdinalIgnoreCase);
@@ -553,101 +684,14 @@ namespace CompanionGearUpgrades.Dialog
             }
         }
 
-        private void ShowArmorMenu()
+        private static string FormatItem(string itemId)
         {
-            var options = new List<InquiryElement>
-            {
-                new InquiryElement(EquipmentIndex.Head, "Pick Head", null),
-                new InquiryElement(EquipmentIndex.Body, "Pick Body", null),
-                new InquiryElement(EquipmentIndex.Cape, "Pick Cape", null),
-                new InquiryElement(EquipmentIndex.Gloves, "Pick Gloves", null),
-                new InquiryElement(EquipmentIndex.Leg, "Pick Legs", null),
-            };
+            if (string.IsNullOrEmpty(itemId))
+                return "(empty)";
 
-            MBInformationManager.ShowMultiSelectionInquiry(
-                new MultiSelectionInquiryData(
-                    "CGU - Armors",
-                    "Choose an armor slot.",
-                    options,
-                    true,
-                    1,
-                    1,
-                    "Select",
-                    "Back",
-                    selected =>
-                    {
-                        PromptSetItem_FromEditMenu((EquipmentIndex)selected[0].Identifier);
-                    },
-                    _ =>
-                    {
-                        ShowEditMenu();
-                    }
-                )
-            );
+            ItemObject item = MBObjectManager.Instance.GetObject<ItemObject>(itemId);
+            string name = item != null ? item.Name.ToString() : "?";
+            return $"{name}";
         }
-
-        private void ShowWeaponMenu()
-        {
-            var options = new List<InquiryElement>
-            {
-                new InquiryElement(EquipmentIndex.Weapon0, "Weapon Slot 1", null),
-                new InquiryElement(EquipmentIndex.Weapon1, "Weapon Slot 2", null),
-                new InquiryElement(EquipmentIndex.Weapon2, "Weapon Slot 3", null),
-                new InquiryElement(EquipmentIndex.Weapon3, "Weapon Slot 4", null),
-            };
-
-            MBInformationManager.ShowMultiSelectionInquiry(
-                new MultiSelectionInquiryData(
-                    "CGU - Weapons",
-                    "Choose a weapon slot.",
-                    options,
-                    true,
-                    1,
-                    1,
-                    "Select",
-                    "Back",
-                    selected =>
-                    {
-                        PromptSetItem_FromEditMenu((EquipmentIndex)selected[0].Identifier);
-                    },
-                    _ =>
-                    {
-                        ShowEditMenu();
-                    }
-                )
-            );
-        }
-
-
-        private void ShowHorseMenu()
-        {
-            var options = new List<InquiryElement>
-            {
-                new InquiryElement(EquipmentIndex.Horse, "Pick Horse", null),
-                new InquiryElement(EquipmentIndex.HorseHarness, "Pick Horse Harness", null),
-            };
-
-            MBInformationManager.ShowMultiSelectionInquiry(
-                new MultiSelectionInquiryData(
-                    "CGU - Horse",
-                    "Choose a horse slot.",
-                    options,
-                    true,
-                    1,
-                    1,
-                    "Select",
-                    "Back",
-                    selected =>
-                    {
-                        PromptSetItem_FromEditMenu((EquipmentIndex)selected[0].Identifier);
-                    },
-                    _ =>
-                    {
-                        ShowEditMenu();
-                    }
-                )
-            );
-        }
-
     }
 }

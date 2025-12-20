@@ -1,6 +1,6 @@
-﻿using CompanionGearUpgrades.Domain;
+﻿using CompanionGearUpgrades.Data;
+using CompanionGearUpgrades.Domain;
 using CompanionGearUpgrades.Services;
-using CompanionGearUpgrades.Data;
 using TaleWorlds.CampaignSystem;
 
 namespace CompanionGearUpgrades.Dialog
@@ -14,7 +14,12 @@ namespace CompanionGearUpgrades.Dialog
         public CompanionGearUpgradeDialog(CompanionGearUpgradeService service, GearPresetOverrides overrides)
         {
             _service = service;
-            _configUi = new GearPresetConfigUi(service, overrides);
+            _configUi = new GearPresetConfigUi(service, overrides, ReturnToConversationRoot);
+        }
+
+        private void ReturnToConversationRoot()
+        {
+            Campaign.Current.ConversationManager.ContinueConversation();
         }
 
         private bool IsTalkingToPlayerCompanion()
