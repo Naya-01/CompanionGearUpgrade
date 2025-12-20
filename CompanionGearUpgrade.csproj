@@ -209,8 +209,13 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="CompanionGearUpgradeBehavior.cs" />
+    <Compile Include="Behaviors\CompanionGearUpgradeBehavior.cs" />
+    <Compile Include="Data\GearPresetRepository.cs" />
+    <Compile Include="Dialog\CompanionGearUpgradeDialog.cs" />
+    <Compile Include="Domain\GearPreset.cs" />
+    <Compile Include="Domain\GearRole.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Services\CompanionGearUpgradeService.cs" />
     <Compile Include="SubModule.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

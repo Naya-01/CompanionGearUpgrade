@@ -1,4 +1,5 @@
-﻿using TaleWorlds.CampaignSystem;
+﻿using CompanionGearUpgrades.Behaviors;
+using TaleWorlds.CampaignSystem;
 using TaleWorlds.Core;
 using TaleWorlds.MountAndBlade;
 
