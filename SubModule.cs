@@ -14,7 +14,7 @@ namespace CompanionGearUpgrades
             if (starter == null)
                 return;
 
-            starter.AddBehavior(new CompanionGearUpgradeBehavior());
+            starter.AddBehavior(new CompanionGearUpgradeBehaviorV2());
         }
     }
 }

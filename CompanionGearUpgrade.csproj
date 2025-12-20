@@ -210,6 +210,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Behaviors\CompanionGearUpgradeBehavior.cs" />
+    <Compile Include="CompanionGearUpgradeBehaviorV2.cs" />
     <Compile Include="Data\GearPresetRepository.cs" />
     <Compile Include="Dialog\CompanionGearUpgradeDialog.cs" />
     <Compile Include="Domain\GearPreset.cs" />
