@@ -1,5 +1,6 @@
 ﻿using CompanionGearUpgrades.Domain;
 using CompanionGearUpgrades.Services;
+using CompanionGearUpgrades.Data;
 using TaleWorlds.CampaignSystem;
 
 namespace CompanionGearUpgrades.Dialog
@@ -7,11 +8,13 @@ namespace CompanionGearUpgrades.Dialog
     public sealed class CompanionGearUpgradeDialog
     {
         private readonly CompanionGearUpgradeService _service;
+        private readonly GearPresetConfigUi _configUi;
         private GearRole _selectedRole;
 
-        public CompanionGearUpgradeDialog(CompanionGearUpgradeService service)
+        public CompanionGearUpgradeDialog(CompanionGearUpgradeService service, GearPresetOverrides overrides)
         {
             _service = service;
+            _configUi = new GearPresetConfigUi(service, overrides);
         }
 
         private bool IsTalkingToPlayerCompanion()
@@ -31,6 +34,16 @@ namespace CompanionGearUpgrades.Dialog
                 IsTalkingToPlayerCompanion,
                 null,
                 100);
+
+            // Dynamic preset configuration
+            starter.AddPlayerLine(
+                "cgu_config_open",
+                "hero_main_options",
+                "hero_main_options",
+                "{=cgu_config_open}Configure upgrade presets",
+                IsTalkingToPlayerCompanion,
+                () => _configUi.Open(),
+                99);
 
             // 2) NPC asks the question -> choice menu (player options)
             starter.AddDialogLine(
