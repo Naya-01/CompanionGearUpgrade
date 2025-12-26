@@ -44,7 +44,7 @@ namespace CompanionGearUpgrades.Dialog
             starter.AddPlayerLine(
                 "cgu_config_open",
                 "hero_main_options",
-                "hero_main_options",
+                "cgu_back_main_npc",
                 "{=cgu_config_open}Configure upgrade presets",
                 IsTalkingToPlayerCompanion,
                 () => _configUi.Open(),
