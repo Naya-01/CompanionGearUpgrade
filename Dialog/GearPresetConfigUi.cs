@@ -368,7 +368,9 @@ namespace CompanionGearUpgrades.Dialog
                 return;
             }
 
-            _working = _service.BuildEffectiveSnapshot(_role, _tier, defaultPreset);
+            _working = new GearPresetSnapshot(defaultPreset.Cost,
+                                  new Dictionary<EquipmentIndex, string>(defaultPreset.Slots)
+                                  );
         }
 
         private void PromptSetPrice_FromEditMenu()
