@@ -210,8 +210,10 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Behaviors\CompanionGearUpgradeBehavior.cs" />
+    <Compile Include="Data\GearPresetOverrides.cs" />
     <Compile Include="Data\GearPresetRepository.cs" />
     <Compile Include="Dialog\CompanionGearUpgradeDialog.cs" />
+    <Compile Include="Dialog\GearPresetConfigUi.cs" />
     <Compile Include="Domain\GearPreset.cs" />
     <Compile Include="Domain\GearRole.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

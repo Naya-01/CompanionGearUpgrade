@@ -1,4 +1,5 @@
-﻿using CompanionGearUpgrades.Domain;
+﻿using CompanionGearUpgrades.Data;
+using CompanionGearUpgrades.Domain;
 using Helpers;
 using System;
 using System.Collections.Generic;
@@ -14,24 +15,44 @@ namespace CompanionGearUpgrades.Services
 {
     public sealed class CompanionGearUpgradeService
     {
-        private readonly Dictionary<(GearRole role, int tier), GearPreset> _presets;
+        private readonly Dictionary<(GearRole role, int tier), GearPreset> _defaultPresets;
+        private readonly GearPresetOverrides _overrides;
 
-        public CompanionGearUpgradeService(Dictionary<(GearRole role, int tier), GearPreset> presets)
+        public CompanionGearUpgradeService(
+            Dictionary<(GearRole role, int tier), GearPreset> defaultPresets,
+            GearPresetOverrides overrides)
         {
-            _presets = presets;
+            _defaultPresets = defaultPresets;
+            _overrides = overrides;
         }
 
-        public bool TryGetPreset(GearRole role, int tier, out GearPreset preset)
+        public bool TryGetDefaultPreset(GearRole role, int tier, out GearPreset preset)
         {
-            return _presets.TryGetValue((role, tier), out preset);
+            return _defaultPresets.TryGetValue((role, tier), out preset);
+        }
+
+        public GearPreset GetDefaultPresetOrNull(GearRole role, int tier)
+        {
+            GearPreset p;
+            return _defaultPresets.TryGetValue((role, tier), out p) ? p : null;
+        }
+
+        public int GetEffectiveCost(GearRole role, int tier)
+        {
+            GearPreset p;
+            if (!_defaultPresets.TryGetValue((role, tier), out p))
+                return 0;
+
+            return _overrides != null ? _overrides.GetEffectiveCost(role, tier, p.Cost) : p.Cost;
         }
 
         public bool SetTierCostVar(GearRole role, int tier, string varName)
         {
             GearPreset preset;
-            if (_presets.TryGetValue((role, tier), out preset))
+            if (_defaultPresets.TryGetValue((role, tier), out preset))
             {
-                MBTextManager.SetTextVariable(varName, preset.Cost);
+                int cost = (_overrides != null) ? _overrides.GetEffectiveCost(role, tier, preset.Cost) : preset.Cost;
+                MBTextManager.SetTextVariable(varName, cost);
                 return true;
             }
 
@@ -46,22 +67,24 @@ namespace CompanionGearUpgrades.Services
                 return;
 
             GearPreset preset;
-            if (!_presets.TryGetValue((role, tier), out preset))
+            if (!_defaultPresets.TryGetValue((role, tier), out preset))
             {
                 InformationManager.DisplayMessage(new InformationMessage("[CGU] Missing preset."));
                 return;
             }
 
-            int cost = preset.Cost;
+            int cost = (_overrides != null) ? _overrides.GetEffectiveCost(role, tier, preset.Cost) : preset.Cost;
             if (Hero.MainHero.Gold < cost)
             {
                 InformationManager.DisplayMessage(new InformationMessage("Not enough gold."));
                 return;
             }
 
+            GearPresetSnapshot eff = BuildEffectiveSnapshot(role, tier, preset);
+
             Equipment newEquipment;
             string error;
-            if (!TryBuildEquipmentAndMoveOldItemsToInventory(target, preset, out newEquipment, out error))
+            if (!TryBuildEquipmentAndMoveOldItemsToInventory(target, eff, out newEquipment, out error))
             {
                 InformationManager.DisplayMessage(new InformationMessage(error));
                 return;
@@ -73,7 +96,14 @@ namespace CompanionGearUpgrades.Services
             InformationManager.DisplayMessage(new InformationMessage($"{target.Name}: equipment updated (Tier {tier}) for {cost} gold."));
         }
 
-        private bool TryBuildEquipmentAndMoveOldItemsToInventory(Hero target, GearPreset preset, out Equipment equipment, out string error)
+        public GearPresetSnapshot BuildEffectiveSnapshot(GearRole role, int tier, GearPreset defaultPreset)
+        {
+            return (_overrides != null)
+                ? _overrides.CaptureSnapshot(role, tier, defaultPreset)
+                : new GearPresetSnapshot(defaultPreset.Cost, new Dictionary<EquipmentIndex, string>(defaultPreset.Slots));
+        }
+
+        private bool TryBuildEquipmentAndMoveOldItemsToInventory(Hero target, GearPresetSnapshot preset, out Equipment equipment, out string error)
         {
             error = null;
             equipment = target.BattleEquipment.Clone();
