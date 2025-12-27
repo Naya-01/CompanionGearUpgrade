@@ -25,7 +25,7 @@ namespace CompanionGearUpgrades.Dialog
         private bool IsTalkingToPlayerCompanion()
         {
             Hero h = Hero.OneToOneConversationHero;
-            return h != null && h.IsPlayerCompanion;
+            return h != null && (h.IsPlayerCompanion || h.Clan == Clan.PlayerClan);
         }
 
         public void AddDialogs(CampaignGameStarter starter)

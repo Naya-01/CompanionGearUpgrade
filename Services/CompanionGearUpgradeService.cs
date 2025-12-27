@@ -63,7 +63,7 @@ namespace CompanionGearUpgrades.Services
         public void TryApplyTier(GearRole role, int tier)
         {
             Hero target = Hero.OneToOneConversationHero;
-            if (target == null || !target.IsPlayerCompanion)
+            if (target == null || !(target.IsPlayerCompanion || target.Clan == Clan.PlayerClan))
                 return;
 
             GearPreset preset;
