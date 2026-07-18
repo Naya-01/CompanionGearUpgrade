@@ -1,0 +1,5 @@
+<ButtonWidget DoNotPassEventsToChildren="true" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="!Header.Tab.Center.Width.Scaled" SuggestedHeight="!Header.Tab.Center.Height.Scaled" PositionYOffset="6" Brush="Header.Tab.Center" Command.Click="SetSelectedCategory" CommandParameter.Click="4" IsVisible="true" UpdateChildrenStates="true">
+  <Children>
+    <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Brush="Clan.TabControl.Text" Text="Equipment" />
+  </Children>
+</ButtonWidget>

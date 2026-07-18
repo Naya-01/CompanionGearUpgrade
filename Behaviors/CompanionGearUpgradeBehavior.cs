@@ -12,6 +12,7 @@ namespace CompanionGearUpgrades.Behaviors
         private Dictionary<string, int> _costOverrides;
         private Dictionary<string, string> _itemOverrides;
         private CompanionGearUpgradeDialog _dialog;
+        private static GearPresetConfigUi _clanConfigUi;
 
         public CompanionGearUpgradeBehavior()
         {
@@ -43,6 +44,24 @@ namespace CompanionGearUpgrades.Behaviors
             var service = new CompanionGearUpgradeService(defaults, overrides);
             _dialog = new CompanionGearUpgradeDialog(service, overrides);
             _dialog.AddDialogs(starter);
+
+            // The Clan tab shares the exact same service and overrides as the
+            // conversation editor, but has no conversation to resume on exit.
+            _clanConfigUi = new GearPresetConfigUi(service, overrides, null);
+        }
+
+        public static bool TryOpenClanPresetConfiguration()
+        {
+            if (_clanConfigUi == null)
+                return false;
+
+            _clanConfigUi.Open();
+            return true;
+        }
+
+        public static void ClearClanPresetConfiguration()
+        {
+            _clanConfigUi = null;
         }
     }
 }

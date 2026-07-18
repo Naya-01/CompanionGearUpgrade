@@ -31,6 +31,18 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="0Harmony">
+      <HintPath>E:\SteamLibrary\steamapps\workshop\content\261550\2859188632\bin\Win64_Shipping_Client\0Harmony.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Bannerlord.Harmony">
+      <HintPath>E:\SteamLibrary\steamapps\workshop\content\261550\2859188632\bin\Win64_Shipping_Client\Bannerlord.Harmony.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Bannerlord.UIExtenderEx">
+      <HintPath>E:\SteamLibrary\steamapps\workshop\content\261550\2859222409\bin\Win64_Shipping_Client\Bannerlord.UIExtenderEx.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
     <Reference Include="SandBox">
       <HintPath>E:\SteamLibrary\steamapps\common\Mount &amp; Blade II Bannerlord\Modules\SandBox\bin\Win64_Shipping_Client\SandBox.dll</HintPath>
     </Reference>
@@ -210,6 +222,8 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Behaviors\CompanionGearUpgradeBehavior.cs" />
+    <Compile Include="Behaviors\EquipmentConfigUiBehavior.cs" />
+    <Compile Include="Data\EquipmentConfigStore.cs" />
     <Compile Include="Data\GearPresetOverrides.cs" />
     <Compile Include="Data\GearPresetRepository.cs" />
     <Compile Include="Dialog\CompanionGearUpgradeDialog.cs" />
@@ -219,6 +233,28 @@
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Services\CompanionGearUpgradeService.cs" />
     <Compile Include="SubModule.cs" />
+    <Compile Include="UI\ClanEquipmentTabExtension.cs" />
+    <Compile Include="UI\ClanEquipmentTabHarmonyPatch.cs" />
+    <Compile Include="UI\ClanManagementViewModelMixin.cs" />
+    <Compile Include="UI\EquipmentConfigView.cs" />
+    <Compile Include="UI\EquipmentConfigViewModel.cs" />
   </ItemGroup>
+  <ItemGroup>
+    <Content Include="SubModule.xml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="GUI\EquipmentConfigWindow.xml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="GUI\PrefabExtensions\ClanEquipmentTab.xml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+  <Target Name="CopyGauntletLayoutToModule" AfterTargets="Build">
+    <MakeDir Directories="$(OutputPath)..\..;$(OutputPath)..\..\GUI;$(OutputPath)..\..\GUI\PrefabExtensions;$(OutputPath)..\..\GUI\Prefabs" />
+    <Copy SourceFiles="$(ProjectDir)SubModule.xml" DestinationFiles="$(OutputPath)..\..\SubModule.xml" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(ProjectDir)GUI\EquipmentConfigWindow.xml;$(ProjectDir)GUI\PrefabExtensions\ClanEquipmentTab.xml" DestinationFiles="$(OutputPath)..\..\GUI\EquipmentConfigWindow.xml;$(OutputPath)..\..\GUI\PrefabExtensions\ClanEquipmentTab.xml" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(ProjectDir)GUI\EquipmentConfigWindow.xml" DestinationFiles="$(OutputPath)..\..\GUI\Prefabs\EquipmentConfigWindow.xml" SkipUnchangedFiles="true" />
+  </Target>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

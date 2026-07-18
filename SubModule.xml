@@ -1,0 +1,29 @@
+<Module>
+	<Name value="Companion Gear Upgrades"/>
+	<Id value="CompanionGearUpgrades"/>
+	<Version value="v1.0.0"/>
+	<SingleplayerModule value="true"/>
+	<MultiplayerModule value="false"/>
+	<Official value="false"/>
+
+	<DependedModules>
+		<DependedModule Id="Native"/>
+		<DependedModule Id="SandBoxCore"/>
+		<DependedModule Id="Sandbox"/>
+		<DependedModule Id="CustomBattle"/>
+		<DependedModule Id="StoryMode"/>
+		<DependedModule Id="Bannerlord.Harmony" DependentVersion="v2.2.2"/>
+		<DependedModule Id="Bannerlord.UIExtenderEx" DependentVersion="v2.13.2"/>
+	</DependedModules>
+
+	<SubModules>
+		<SubModule>
+			<Name value="CompanionGearUpgrade"/>
+			<DLLName value="CompanionGearUpgrade.dll"/>
+			<SubModuleClassType value="CompanionGearUpgrades.SubModule"/>
+			<Tags>
+				<Tag key="DedicatedServerType" value="none"/>
+			</Tags>
+		</SubModule>
+	</SubModules>
+</Module>
