@@ -1,5 +1,4 @@
 using CompanionGearUpgrades.Behaviors;
-using CompanionGearUpgrades.UI;
 using Bannerlord.UIExtenderEx;
 using HarmonyLib;
 using TaleWorlds.CampaignSystem;
@@ -12,7 +11,6 @@ namespace CompanionGearUpgrades
     {
         private UIExtender _uiExtender;
         private Harmony _harmony;
-        private EquipmentConfigView _equipmentConfigView;
 
         protected override void OnSubModuleLoad()
         {
@@ -38,12 +36,6 @@ namespace CompanionGearUpgrades
         public override void OnGameEnd(Game game)
         {
             CompanionGearUpgradeBehavior.ClearClanPresetConfiguration();
-
-            if (_equipmentConfigView != null)
-            {
-                _equipmentConfigView.Dispose();
-                _equipmentConfigView = null;
-            }
 
             base.OnGameEnd(game);
         }

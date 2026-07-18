@@ -1,6 +1,7 @@
 ﻿using CompanionGearUpgrades.Data;
 using CompanionGearUpgrades.Dialog;
 using CompanionGearUpgrades.Services;
+using CompanionGearUpgrades.UI;
 using System.Collections.Generic;
 using TaleWorlds.CampaignSystem;
 
@@ -12,7 +13,7 @@ namespace CompanionGearUpgrades.Behaviors
         private Dictionary<string, int> _costOverrides;
         private Dictionary<string, string> _itemOverrides;
         private CompanionGearUpgradeDialog _dialog;
-        private static GearPresetConfigUi _clanConfigUi;
+        private static EquipmentConfigView _clanConfigView;
 
         public CompanionGearUpgradeBehavior()
         {
@@ -45,23 +46,27 @@ namespace CompanionGearUpgrades.Behaviors
             _dialog = new CompanionGearUpgradeDialog(service, overrides);
             _dialog.AddDialogs(starter);
 
-            // The Clan tab shares the exact same service and overrides as the
-            // conversation editor, but has no conversation to resume on exit.
-            _clanConfigUi = new GearPresetConfigUi(service, overrides, null);
+            // Clan and conversation configuration share these exact instances.
+            // The Clan path is a Gauntlet layer and never opens InventoryScreen.
+            _clanConfigView = new EquipmentConfigView(service, overrides);
+            _clanConfigView.Initialize();
         }
 
         public static bool TryOpenClanPresetConfiguration()
         {
-            if (_clanConfigUi == null)
+            if (_clanConfigView == null)
                 return false;
 
-            _clanConfigUi.Open();
-            return true;
+            return EquipmentConfigView.OpenConfiguration();
         }
 
         public static void ClearClanPresetConfiguration()
         {
-            _clanConfigUi = null;
+            if (_clanConfigView != null)
+            {
+                _clanConfigView.Dispose();
+                _clanConfigView = null;
+            }
         }
     }
 }

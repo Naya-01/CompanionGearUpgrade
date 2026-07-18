@@ -103,6 +103,30 @@ namespace CompanionGearUpgrades.Services
                 : new GearPresetSnapshot(defaultPreset.Cost, new Dictionary<EquipmentIndex, string>(defaultPreset.Slots));
         }
 
+        public List<ItemObject> GetCompatibleItems(EquipmentIndex slot)
+        {
+            HashSet<ItemObject.ItemTypeEnum> allowed = GetAllowedItemTypesForSlot(slot);
+            var list = new List<ItemObject>();
+
+            foreach (ItemObject item in MBObjectManager.Instance.GetObjectTypeList<ItemObject>())
+            {
+                if (item == null || string.IsNullOrEmpty(item.StringId) || !allowed.Contains(item.ItemType))
+                    continue;
+
+                list.Add(item);
+            }
+
+            list.Sort((a, b) =>
+            {
+                int nameComparison = string.Compare(a.Name.ToString(), b.Name.ToString(), StringComparison.OrdinalIgnoreCase);
+                return nameComparison != 0
+                    ? nameComparison
+                    : string.Compare(a.StringId, b.StringId, StringComparison.OrdinalIgnoreCase);
+            });
+
+            return list;
+        }
+
         private bool TryBuildEquipmentAndMoveOldItemsToInventory(Hero target, GearPresetSnapshot preset, out Equipment equipment, out string error)
         {
             error = null;
@@ -110,17 +134,40 @@ namespace CompanionGearUpgrades.Services
 
             MobileParty mainParty = MobileParty.MainParty;
             ItemRoster playerRoster = (mainParty != null) ? mainParty.ItemRoster : null;
+            var resolvedItems = new Dictionary<EquipmentIndex, ItemObject>();
 
-            foreach (var kv in preset.Slots)
+            // Resolve every configured item before changing the roster. A bad
+            // StringId must not leave half of an upgrade applied.
+            foreach (EquipmentIndex slot in GearPresetOverrides.EditableSlots)
             {
-                EquipmentIndex slot = kv.Key;
-                string itemId = kv.Value;
+                string itemId;
+                if (!preset.Slots.TryGetValue(slot, out itemId) || string.IsNullOrEmpty(itemId))
+                    continue;
+
+                ItemObject item = MBObjectManager.Instance.GetObject<ItemObject>(itemId);
+                if (item == null)
+                {
+                    error = $"[CGU] Item not found: '{itemId}'. Check the ID (vanilla/War Sails/mods).";
+                    equipment = null;
+                    return false;
+                }
+
+                resolvedItems[slot] = item;
+            }
+
+            foreach (EquipmentIndex slot in GearPresetOverrides.EditableSlots)
+            {
+                ItemObject item;
+                resolvedItems.TryGetValue(slot, out item);
 
                 if (playerRoster != null)
                 {
                     EquipmentElement oldElement = target.BattleEquipment.GetEquipmentFromSlot(slot);
+                    string oldId = oldElement.IsEmpty || oldElement.Item == null ? null : oldElement.Item.StringId;
+                    string newId = item == null ? null : item.StringId;
 
-                    if (!oldElement.IsEmpty && !oldElement.IsQuestItem && !oldElement.IsInvalid())
+                    if (!string.Equals(oldId, newId, StringComparison.Ordinal) &&
+                        !oldElement.IsEmpty && !oldElement.IsQuestItem && !oldElement.IsInvalid())
                     {
                         try
                         {
@@ -135,18 +182,49 @@ namespace CompanionGearUpgrades.Services
                     }
                 }
 
-                ItemObject item = MBObjectManager.Instance.GetObject<ItemObject>(itemId);
-                if (item == null)
-                {
-                    error = $"[CGU] Item not found: '{itemId}'. Check the ID (vanilla/War Sails/mods).";
-                    equipment = null;
-                    return false;
-                }
-
-                equipment.AddEquipmentToSlotWithoutAgent(slot, new EquipmentElement(item));
+                // Always write every editable slot. In particular, a missing
+                // or null value explicitly clears the cloned equipment slot.
+                equipment.AddEquipmentToSlotWithoutAgent(
+                    slot,
+                    item != null ? new EquipmentElement(item) : default(EquipmentElement));
             }
 
             return true;
+        }
+
+        private static HashSet<ItemObject.ItemTypeEnum> GetAllowedItemTypesForSlot(EquipmentIndex slot)
+        {
+            switch (slot)
+            {
+                case EquipmentIndex.Head:
+                    return new HashSet<ItemObject.ItemTypeEnum> { ItemObject.ItemTypeEnum.HeadArmor };
+                case EquipmentIndex.Body:
+                    return new HashSet<ItemObject.ItemTypeEnum> { ItemObject.ItemTypeEnum.BodyArmor };
+                case EquipmentIndex.Cape:
+                    return new HashSet<ItemObject.ItemTypeEnum> { ItemObject.ItemTypeEnum.Cape };
+                case EquipmentIndex.Gloves:
+                    return new HashSet<ItemObject.ItemTypeEnum> { ItemObject.ItemTypeEnum.HandArmor };
+                case EquipmentIndex.Leg:
+                    return new HashSet<ItemObject.ItemTypeEnum> { ItemObject.ItemTypeEnum.LegArmor };
+                case EquipmentIndex.Horse:
+                    return new HashSet<ItemObject.ItemTypeEnum> { ItemObject.ItemTypeEnum.Horse };
+                case EquipmentIndex.HorseHarness:
+                    return new HashSet<ItemObject.ItemTypeEnum> { ItemObject.ItemTypeEnum.HorseHarness };
+                default:
+                    return new HashSet<ItemObject.ItemTypeEnum>
+                    {
+                        ItemObject.ItemTypeEnum.OneHandedWeapon,
+                        ItemObject.ItemTypeEnum.TwoHandedWeapon,
+                        ItemObject.ItemTypeEnum.Polearm,
+                        ItemObject.ItemTypeEnum.Bow,
+                        ItemObject.ItemTypeEnum.Crossbow,
+                        ItemObject.ItemTypeEnum.Thrown,
+                        ItemObject.ItemTypeEnum.Shield,
+                        ItemObject.ItemTypeEnum.Arrows,
+                        ItemObject.ItemTypeEnum.Bolts,
+                        ItemObject.ItemTypeEnum.Banner
+                    };
+            }
         }
     }
 }

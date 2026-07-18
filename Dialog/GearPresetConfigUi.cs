@@ -1,38 +1,23 @@
 ﻿using CompanionGearUpgrades.Data;
 using CompanionGearUpgrades.Domain;
 using CompanionGearUpgrades.Services;
-using Helpers;
 using System;
 using System.Collections.Generic;
 using TaleWorlds.CampaignSystem;
-using TaleWorlds.CampaignSystem.Party;
-using TaleWorlds.CampaignSystem.Roster;
 using TaleWorlds.Core;
 using TaleWorlds.Library;
-using TaleWorlds.Localization;
 using TaleWorlds.ObjectSystem;
 
 namespace CompanionGearUpgrades.Dialog
 {
     /// <summary>
-    /// Small dynamic configuration UI using only Inquiry windows (no custom Gauntlet).
-    /// Flow: Role -> Tier -> Editor (Categories) -> Pick slot -> Inventory picker -> back to same category.
+    /// Legacy dialogue configuration UI. It uses the same service and
+    /// overrides as the Clan Gauntlet editor and edits only a temporary snapshot.
+    /// Flow: Role -> Tier -> Editor (Categories) -> Pick slot -> item inquiry.
     /// Exit -> Save / Cancel -> return to conversation root.
     /// </summary>
     public sealed class GearPresetConfigUi
     {
-        private enum InventoryItemType
-        {
-            HeadArmor,
-            BodyArmor,
-            Cape,
-            Gloves,
-            LegArmor,
-            WeaponOrAmmo,
-            Horse,
-            HorseHarness
-        }
-
         private readonly CompanionGearUpgradeService _service;
         private readonly GearPresetOverrides _overrides;
 
@@ -45,27 +30,8 @@ namespace CompanionGearUpgrades.Dialog
         // Session state (Cancel discards, Save commits)
         private GearPresetSnapshot _working;
 
-        // If you came from a category menu (Armors/Weapons/Horse), we store where to go back after the inventory picker closes.
+        // If you came from a category menu, store where to go back after the item inquiry closes.
         private Action _returnAfterPicker;
-
-        // Cache to avoid rebuilding huge lists every time
-        private readonly Dictionary<InventoryItemType, List<ItemObject>> _cachedItemsByType =
-            new Dictionary<InventoryItemType, List<ItemObject>>();
-
-        private static readonly EquipmentIndex[] _allEditableSlots =
-        {
-            EquipmentIndex.Weapon0,
-            EquipmentIndex.Weapon1,
-            EquipmentIndex.Weapon2,
-            EquipmentIndex.Weapon3,
-            EquipmentIndex.Head,
-            EquipmentIndex.Body,
-            EquipmentIndex.Cape,
-            EquipmentIndex.Gloves,
-            EquipmentIndex.Leg,
-            EquipmentIndex.Horse,
-            EquipmentIndex.HorseHarness,
-        };
 
         public GearPresetConfigUi(CompanionGearUpgradeService service, GearPresetOverrides overrides, Action returnToConversationRoot)
         {
@@ -256,7 +222,7 @@ namespace CompanionGearUpgrades.Dialog
 
             MBInformationManager.ShowMultiSelectionInquiry(new MultiSelectionInquiryData(
                 "CGU - Armors",
-                "Pick a slot (you will choose the item in the Inventory screen).",
+                "Pick a slot (you will choose an item in a simple inquiry).",
                 options,
                 true,
                 1,
@@ -265,7 +231,7 @@ namespace CompanionGearUpgrades.Dialog
                 "Back",
                 selected =>
                 {
-                    // Remember category so we return here after inventory picker closes.
+                    // Remember category so we return here after the item inquiry closes.
                     _returnAfterPicker = ShowArmorMenu;
                     PromptSetItem_FromEditMenu((EquipmentIndex)selected[0].Identifier);
                 },
@@ -294,7 +260,7 @@ namespace CompanionGearUpgrades.Dialog
 
             MBInformationManager.ShowMultiSelectionInquiry(new MultiSelectionInquiryData(
                 "CGU - Weapons",
-                "Pick a slot (you will choose the item in the Inventory screen).",
+                "Pick a slot (you will choose an item in a simple inquiry).",
                 options,
                 true,
                 1,
@@ -329,7 +295,7 @@ namespace CompanionGearUpgrades.Dialog
 
             MBInformationManager.ShowMultiSelectionInquiry(new MultiSelectionInquiryData(
                 "CGU - Horse",
-                "Pick a slot (you will choose the item in the Inventory screen).",
+                "Pick a slot (you will choose an item in a simple inquiry).",
                 options,
                 true,
                 1,
@@ -403,11 +369,38 @@ namespace CompanionGearUpgrades.Dialog
             if (_working == null)
                 return;
 
-            OpenInventoryPickerForSlot(slot, () =>
+            List<ItemObject> candidates = _service.GetCompatibleItems(slot);
+            var options = new List<InquiryElement>
             {
-                Action back = _returnAfterPicker ?? (Action)ShowEditMenu;
-                back();
-            });
+                new InquiryElement(GearPresetOverrides.EmptySlotMarker, "(empty slot)", null)
+            };
+
+            foreach (ItemObject item in candidates)
+                options.Add(new InquiryElement(item.StringId, $"{item.Name} [{item.StringId}]", null));
+
+            Action back = _returnAfterPicker ?? (Action)ShowEditMenu;
+            MBInformationManager.ShowMultiSelectionInquiry(new MultiSelectionInquiryData(
+                $"CGU - Pick {slot}",
+                "Choose an item. The selection changes only the temporary snapshot.",
+                options,
+                true,
+                1,
+                1,
+                "Select",
+                "Back",
+                selected =>
+                {
+                    object identifier = selected[0].Identifier;
+                    string id = identifier as string;
+                    _working.Slots[slot] = string.Equals(id, GearPresetOverrides.EmptySlotMarker, StringComparison.Ordinal)
+                        ? null
+                        : id;
+                    back();
+                },
+                _ => back(),
+                "",
+                true
+            ));
         }
 
         private void CommitAndClose()
@@ -454,236 +447,6 @@ namespace CompanionGearUpgrades.Dialog
                     ExitToConversationRoot();
                 }
             ));
-        }
-
-        private void OpenInventoryPickerForSlot(EquipmentIndex slot, Action onClosed)
-        {
-            if (_working == null)
-            {
-                onClosed?.Invoke();
-                return;
-            }
-
-            MobileParty party = MobileParty.MainParty;
-            ItemRoster partyRoster = party != null ? party.ItemRoster : null;
-            if (partyRoster == null)
-            {
-                InformationManager.DisplayMessage(new InformationMessage("[CGU] Main party inventory not available."));
-                onClosed?.Invoke();
-                return;
-            }
-
-            List<ItemObject> candidates = GetItemsForSlot(slot);
-            if (candidates == null || candidates.Count == 0)
-            {
-                InformationManager.DisplayMessage(new InformationMessage("[CGU] No items available for this slot."));
-                onClosed?.Invoke();
-                return;
-            }
-
-            // Left side: a catalog of valid items (1x each). The player must move ONE item to their side,
-            // then press Done. We rollback inventory & equipment changes after closing (no free items / no equip).
-            ItemRoster leftRoster = new ItemRoster();
-            foreach (ItemObject it in candidates)
-                leftRoster.AddToCounts(new EquipmentElement(it), 1);
-
-            Dictionary<string, int> beforeInv = CaptureRosterCounts(partyRoster);
-            Equipment beforeBattle = Hero.MainHero.BattleEquipment.Clone();
-            Equipment beforeCivil = Hero.MainHero.CivilianEquipment.Clone();
-
-            string title = $"CGU - Pick {slot}";
-            InventoryScreenHelper.OpenScreenAsReceiveItems(leftRoster, new TextObject(title), () =>
-            {
-                // Detect selection (either moved to inventory OR equipped during the screen)
-                string selectedId = TryDetectSelectedItemId(slot, beforeInv, beforeBattle);
-
-                // Rollback everything to avoid exploits / accidental changes
-                RestoreEquipmentToSnapshot(Hero.MainHero.BattleEquipment, beforeBattle);
-                RestoreEquipmentToSnapshot(Hero.MainHero.CivilianEquipment, beforeCivil);
-                RestoreRosterCountsToSnapshot(partyRoster, beforeInv);
-
-                if (!string.IsNullOrEmpty(selectedId))
-                {
-                    _working.Slots[slot] = selectedId;
-                }
-                else
-                {
-                    InformationManager.DisplayMessage(new InformationMessage("[CGU] No item selected. Move one item from the left, then press Done."));
-                }
-
-                onClosed?.Invoke();
-            });
-        }
-
-        private static void RestoreEquipmentToSnapshot(Equipment target, Equipment snapshot)
-        {
-            if (target == null || snapshot == null)
-                return;
-
-            foreach (EquipmentIndex slot in _allEditableSlots)
-                target.AddEquipmentToSlotWithoutAgent(slot, snapshot.GetEquipmentFromSlot(slot));
-        }
-
-        private static Dictionary<string, int> CaptureRosterCounts(ItemRoster roster)
-        {
-            var dict = new Dictionary<string, int>(StringComparer.Ordinal);
-            if (roster == null)
-                return dict;
-
-            for (int i = 0; i < roster.Count; i++)
-            {
-                ItemObject item = roster.GetItemAtIndex(i);
-                if (item == null || string.IsNullOrEmpty(item.StringId))
-                    continue;
-
-                dict[item.StringId] = roster.GetElementNumber(i);
-            }
-
-            return dict;
-        }
-
-        private static void RestoreRosterCountsToSnapshot(ItemRoster roster, Dictionary<string, int> before)
-        {
-            if (roster == null || before == null)
-                return;
-
-            Dictionary<string, int> now = CaptureRosterCounts(roster);
-            var keys = new HashSet<string>(before.Keys, StringComparer.Ordinal);
-            keys.UnionWith(now.Keys);
-
-            foreach (string id in keys)
-            {
-                int beforeCount = before.TryGetValue(id, out int b) ? b : 0;
-                int nowCount = now.TryGetValue(id, out int n) ? n : 0;
-                int diff = nowCount - beforeCount;
-                if (diff == 0)
-                    continue;
-
-                ItemObject item = MBObjectManager.Instance.GetObject<ItemObject>(id);
-                if (item == null)
-                    continue;
-
-                // Apply opposite delta to revert to 'before'
-                roster.AddToCounts(new EquipmentElement(item), -diff);
-            }
-        }
-
-        private string TryDetectSelectedItemId(EquipmentIndex slot, Dictionary<string, int> beforeInv, Equipment beforeBattle)
-        {
-            HashSet<ItemObject.ItemTypeEnum> allowedTypes = GetAllowedItemTypesForSlot(slot);
-
-            // 1) Detect items moved from the left roster into player inventory (diff > 0)
-            ItemRoster partyRoster = MobileParty.MainParty?.ItemRoster;
-            if (partyRoster != null)
-            {
-                Dictionary<string, int> afterInv = CaptureRosterCounts(partyRoster);
-                foreach (var kv in afterInv)
-                {
-                    int beforeCount = beforeInv != null && beforeInv.TryGetValue(kv.Key, out int b) ? b : 0;
-                    if (kv.Value <= beforeCount)
-                        continue;
-
-                    ItemObject item = MBObjectManager.Instance.GetObject<ItemObject>(kv.Key);
-                    if (item != null && allowedTypes.Contains(item.ItemType))
-                        return kv.Key;
-                }
-            }
-
-            // 2) If the player equipped something directly, detect by slot change
-            EquipmentElement beforeEl = beforeBattle != null ? beforeBattle.GetEquipmentFromSlot(slot) : default;
-            EquipmentElement afterEl = Hero.MainHero.BattleEquipment.GetEquipmentFromSlot(slot);
-
-            string beforeId = (!beforeEl.IsEmpty && beforeEl.Item != null) ? beforeEl.Item.StringId : null;
-            string afterId = (!afterEl.IsEmpty && afterEl.Item != null) ? afterEl.Item.StringId : null;
-
-            if (!string.IsNullOrEmpty(afterId) && !string.Equals(beforeId, afterId, StringComparison.Ordinal))
-            {
-                ItemObject item = afterEl.Item;
-                if (item != null && allowedTypes.Contains(item.ItemType))
-                    return afterId;
-            }
-
-            return null;
-        }
-
-        private List<ItemObject> GetItemsForSlot(EquipmentIndex slot)
-        {
-            InventoryItemType type = GetInventoryItemTypeForSlot(slot);
-            if (_cachedItemsByType.TryGetValue(type, out var cached))
-                return cached;
-
-            HashSet<ItemObject.ItemTypeEnum> allowed = GetAllowedItemTypesForSlot(slot);
-            var list = new List<ItemObject>();
-
-            foreach (ItemObject item in MBObjectManager.Instance.GetObjectTypeList<ItemObject>())
-            {
-                if (item == null || string.IsNullOrEmpty(item.StringId))
-                    continue;
-
-                if (!allowed.Contains(item.ItemType))
-                    continue;
-
-                list.Add(item);
-            }
-
-            list.Sort((a, b) =>
-            {
-                int n = string.Compare(a.Name.ToString(), b.Name.ToString(), StringComparison.OrdinalIgnoreCase);
-                return n != 0 ? n : string.Compare(a.StringId, b.StringId, StringComparison.OrdinalIgnoreCase);
-            });
-
-            _cachedItemsByType[type] = list;
-            return list;
-        }
-
-        private static InventoryItemType GetInventoryItemTypeForSlot(EquipmentIndex slot)
-        {
-            switch (slot)
-            {
-                case EquipmentIndex.Head: return InventoryItemType.HeadArmor;
-                case EquipmentIndex.Body: return InventoryItemType.BodyArmor;
-                case EquipmentIndex.Cape: return InventoryItemType.Cape;
-                case EquipmentIndex.Gloves: return InventoryItemType.Gloves;
-                case EquipmentIndex.Leg: return InventoryItemType.LegArmor;
-                case EquipmentIndex.Horse: return InventoryItemType.Horse;
-                case EquipmentIndex.HorseHarness: return InventoryItemType.HorseHarness;
-                default: return InventoryItemType.WeaponOrAmmo;
-            }
-        }
-
-        private static HashSet<ItemObject.ItemTypeEnum> GetAllowedItemTypesForSlot(EquipmentIndex slot)
-        {
-            switch (slot)
-            {
-                case EquipmentIndex.Head:
-                    return new HashSet<ItemObject.ItemTypeEnum> { ItemObject.ItemTypeEnum.HeadArmor };
-                case EquipmentIndex.Body:
-                    return new HashSet<ItemObject.ItemTypeEnum> { ItemObject.ItemTypeEnum.BodyArmor };
-                case EquipmentIndex.Cape:
-                    return new HashSet<ItemObject.ItemTypeEnum> { ItemObject.ItemTypeEnum.Cape };
-                case EquipmentIndex.Gloves:
-                    return new HashSet<ItemObject.ItemTypeEnum> { ItemObject.ItemTypeEnum.HandArmor };
-                case EquipmentIndex.Leg:
-                    return new HashSet<ItemObject.ItemTypeEnum> { ItemObject.ItemTypeEnum.LegArmor };
-                case EquipmentIndex.Horse:
-                    return new HashSet<ItemObject.ItemTypeEnum> { ItemObject.ItemTypeEnum.Horse };
-                case EquipmentIndex.HorseHarness:
-                    return new HashSet<ItemObject.ItemTypeEnum> { ItemObject.ItemTypeEnum.HorseHarness };
-                default:
-                    return new HashSet<ItemObject.ItemTypeEnum>
-                    {
-                        ItemObject.ItemTypeEnum.OneHandedWeapon,
-                        ItemObject.ItemTypeEnum.TwoHandedWeapon,
-                        ItemObject.ItemTypeEnum.Polearm,
-                        ItemObject.ItemTypeEnum.Bow,
-                        ItemObject.ItemTypeEnum.Crossbow,
-                        ItemObject.ItemTypeEnum.Thrown,
-                        ItemObject.ItemTypeEnum.Shield,
-                        ItemObject.ItemTypeEnum.Arrows,
-                        ItemObject.ItemTypeEnum.Bolts,
-                        ItemObject.ItemTypeEnum.Banner,
-                    };
-            }
         }
 
         private static string FormatItem(string itemId)

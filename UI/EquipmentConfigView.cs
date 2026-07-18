@@ -1,3 +1,5 @@
+using CompanionGearUpgrades.Data;
+using CompanionGearUpgrades.Services;
 using System;
 using TaleWorlds.Engine.GauntletUI;
 using TaleWorlds.Library;
@@ -6,20 +8,28 @@ using TaleWorlds.ScreenSystem;
 namespace CompanionGearUpgrades.UI
 {
     /// <summary>
-    /// Hosts the equipment movie as a global Gauntlet layer. ScreenManager
-    /// events decide when the button is visible, avoiding campaign-tick timing
-    /// and avoiding edits to Native's ClanScreen.xml.
+    /// Hosts the preset editor as a modal Gauntlet layer while the Clan screen
+    /// is active. The editor itself never touches a hero or an inventory.
     /// </summary>
     public sealed class EquipmentConfigView
     {
         private const string LayerName = "CompanionGearUpgradeClanEquipment";
         private static EquipmentConfigView _current;
 
+        private readonly CompanionGearUpgradeService _service;
+        private readonly GearPresetOverrides _overrides;
+
         private GlobalLayer _globalLayer;
         private GauntletLayer _layer;
         private GauntletMovieIdentifier _movie;
-        private EquipmentConfigViewModel _viewModel;
+        private GearPresetConfigViewModel _viewModel;
         private bool _isClanScreen;
+
+        public EquipmentConfigView(CompanionGearUpgradeService service, GearPresetOverrides overrides)
+        {
+            _service = service ?? throw new ArgumentNullException(nameof(service));
+            _overrides = overrides ?? throw new ArgumentNullException(nameof(overrides));
+        }
 
         public void Initialize()
         {
@@ -27,28 +37,15 @@ namespace CompanionGearUpgrades.UI
                 return;
 
             _current = this;
-
             _layer = new GauntletLayer(LayerName, 1000, false);
-            _viewModel = new EquipmentConfigViewModel(SetWindowLayerState);
+            _viewModel = new GearPresetConfigViewModel(_service, _overrides, SetWindowLayerState);
             _movie = _layer.LoadMovie("EquipmentConfigWindow", _viewModel);
-
             _globalLayer = new EquipmentGlobalLayer(_layer);
 
             ScreenManager.OnPushScreen += OnPushScreen;
             ScreenManager.OnPopScreen += OnPopScreen;
             ScreenManager.AddGlobalLayer(_globalLayer, false);
-
             UpdateScreenVisibility(ScreenManager.TopScreen);
-        }
-
-        public void Update()
-        {
-            // Compatibility entry point for the existing campaign behavior.
-            // The primary path is ScreenManager's push/pop events.
-            if (_globalLayer == null)
-                Initialize();
-            else
-                UpdateScreenVisibility(ScreenManager.TopScreen);
         }
 
         public void Dispose()
@@ -71,22 +68,13 @@ namespace CompanionGearUpgrades.UI
                 _current = null;
         }
 
-        public static void OpenConfiguration()
+        public static bool OpenConfiguration()
         {
-            if (_current == null)
-            {
-                InformationManager.DisplayMessage(new InformationMessage("[CGU] Erreur : EquipmentConfigView n'est pas initialisée."));
-                return;
-            }
-
-            if (_current._viewModel == null)
-            {
-                InformationManager.DisplayMessage(new InformationMessage("[CGU] Erreur : EquipmentConfigViewModel est nul."));
-                return;
-            }
+            if (_current == null || _current._viewModel == null)
+                return false;
 
             _current._viewModel.ExecuteOpenConfiguration();
-            InformationManager.DisplayMessage(new InformationMessage("[CGU] EquipmentConfigWindow demandée."));
+            return true;
         }
 
         private void OnPushScreen(ScreenBase screen)
@@ -109,8 +97,9 @@ namespace CompanionGearUpgrades.UI
 
             if (_layer != null)
             {
-                _layer.IsFocusLayer = _isClanScreen;
-                _layer.InputRestrictions.SetInputRestrictions(false, InputUsageMask.All);
+                bool isModal = _isClanScreen && _viewModel != null && _viewModel.IsWindowOpen;
+                _layer.IsFocusLayer = isModal;
+                _layer.InputRestrictions.SetInputRestrictions(isModal, InputUsageMask.All);
             }
         }
 
@@ -119,7 +108,7 @@ namespace CompanionGearUpgrades.UI
             if (_layer == null)
                 return;
 
-            _layer.IsFocusLayer = _isClanScreen || isOpen;
+            _layer.IsFocusLayer = _isClanScreen && isOpen;
             _layer.InputRestrictions.SetInputRestrictions(isOpen, InputUsageMask.All);
         }
 

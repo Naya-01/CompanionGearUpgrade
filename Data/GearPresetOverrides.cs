@@ -11,6 +11,25 @@ namespace CompanionGearUpgrades.Data
     /// </summary>
     public sealed class GearPresetOverrides
     {
+        // A persisted marker is required because removing an item must be
+        // distinguishable from having no override (which means "use default").
+        public const string EmptySlotMarker = "__CGU_EMPTY_SLOT__";
+
+        public static readonly EquipmentIndex[] EditableSlots =
+        {
+            EquipmentIndex.Weapon0,
+            EquipmentIndex.Weapon1,
+            EquipmentIndex.Weapon2,
+            EquipmentIndex.Weapon3,
+            EquipmentIndex.Head,
+            EquipmentIndex.Body,
+            EquipmentIndex.Cape,
+            EquipmentIndex.Gloves,
+            EquipmentIndex.Leg,
+            EquipmentIndex.Horse,
+            EquipmentIndex.HorseHarness
+        };
+
         private Dictionary<string, int> _costOverrides;
         private Dictionary<string, string> _itemOverrides;
 
@@ -29,7 +48,12 @@ namespace CompanionGearUpgrades.Data
         public bool TryGetOverrideItemId(GearRole role, int tier, EquipmentIndex slot, out string itemId)
         {
             itemId = null;
-            return _itemOverrides != null && _itemOverrides.TryGetValue(ItemKey(role, tier, slot), out itemId);
+            string storedId;
+            if (_itemOverrides == null || !_itemOverrides.TryGetValue(ItemKey(role, tier, slot), out storedId))
+                return false;
+
+            itemId = IsEmptyMarker(storedId) ? null : storedId;
+            return true;
         }
 
         public void SetCostOverride(GearRole role, int tier, int cost)
@@ -50,12 +74,23 @@ namespace CompanionGearUpgrades.Data
         public void SetItemOverride(GearRole role, int tier, EquipmentIndex slot, string itemId)
         {
             if (string.IsNullOrEmpty(itemId))
-                throw new ArgumentException("itemId must be a non-empty string", nameof(itemId));
+            {
+                SetSlotEmpty(role, tier, slot);
+                return;
+            }
 
             if (_itemOverrides == null)
                 _itemOverrides = new Dictionary<string, string>();
 
             _itemOverrides[ItemKey(role, tier, slot)] = itemId;
+        }
+
+        public void SetSlotEmpty(GearRole role, int tier, EquipmentIndex slot)
+        {
+            if (_itemOverrides == null)
+                _itemOverrides = new Dictionary<string, string>();
+
+            _itemOverrides[ItemKey(role, tier, slot)] = EmptySlotMarker;
         }
 
         public void ClearItemOverride(GearRole role, int tier, EquipmentIndex slot)
@@ -72,11 +107,11 @@ namespace CompanionGearUpgrades.Data
                 throw new ArgumentNullException(nameof(defaultPreset));
 
             var merged = new Dictionary<EquipmentIndex, string>(defaultPreset.Slots);
-            foreach (var kv in defaultPreset.Slots)
+            foreach (EquipmentIndex slot in EditableSlots)
             {
                 string id;
-                if (TryGetOverrideItemId(role, tier, kv.Key, out id) && !string.IsNullOrEmpty(id))
-                    merged[kv.Key] = id;
+                if (TryGetOverrideItemId(role, tier, slot, out id))
+                    merged[slot] = id;
             }
 
             int cost = GetEffectiveCost(role, tier, defaultPreset.Cost);
@@ -96,29 +131,40 @@ namespace CompanionGearUpgrades.Data
             else
                 ClearCostOverride(role, tier);
 
-            // Item overrides: only store diffs from default.
-            foreach (var kv in snapshot.Slots)
+            // Item overrides: only store diffs from default. An empty value is
+            // persisted explicitly; clearing the dictionary entry would make
+            // the default item silently come back on the next upgrade.
+            foreach (EquipmentIndex slot in EditableSlots)
             {
                 string defaultId;
-                bool hasDefault = defaultPreset.Slots.TryGetValue(kv.Key, out defaultId);
-                string newId = kv.Value;
+                bool hasDefault = defaultPreset.Slots.TryGetValue(slot, out defaultId);
+                string newId;
 
-                if (!hasDefault)
+                // A slot absent from a snapshot was not edited. This matters
+                // for slots which are absent from the repository default.
+                if (!snapshot.Slots.TryGetValue(slot, out newId))
+                    continue;
+
+                if (string.IsNullOrEmpty(newId))
                 {
-                    // New slot introduced by user: store it.
-                    SetItemOverride(role, tier, kv.Key, newId);
+                    SetSlotEmpty(role, tier, slot);
                     continue;
                 }
 
                 if (!string.Equals(defaultId, newId, StringComparison.Ordinal))
-                    SetItemOverride(role, tier, kv.Key, newId);
+                    SetItemOverride(role, tier, slot, newId);
                 else
-                    ClearItemOverride(role, tier, kv.Key);
+                    ClearItemOverride(role, tier, slot);
             }
         }
 
         public static string CostKey(GearRole role, int tier) => $"{role}:{tier}:cost";
         public static string ItemKey(GearRole role, int tier, EquipmentIndex slot) => $"{role}:{tier}:{(int)slot}";
+
+        private static bool IsEmptyMarker(string value)
+        {
+            return string.IsNullOrEmpty(value) || string.Equals(value, EmptySlotMarker, StringComparison.Ordinal);
+        }
     }
 
     public sealed class GearPresetSnapshot
@@ -129,7 +175,14 @@ namespace CompanionGearUpgrades.Data
         public GearPresetSnapshot(int cost, Dictionary<EquipmentIndex, string> slots)
         {
             Cost = cost;
-            Slots = slots ?? new Dictionary<EquipmentIndex, string>();
+            Slots = slots != null
+                ? new Dictionary<EquipmentIndex, string>(slots)
+                : new Dictionary<EquipmentIndex, string>();
+        }
+
+        public GearPresetSnapshot Clone()
+        {
+            return new GearPresetSnapshot(Cost, Slots);
         }
     }
 }
