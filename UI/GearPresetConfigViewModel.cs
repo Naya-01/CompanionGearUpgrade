@@ -186,7 +186,9 @@ namespace CompanionGearUpgrades.UI
 
                 _itemSearchText = searchText;
                 OnPropertyChanged(nameof(ItemSearchText));
+                ClearHoveredCandidate();
                 RebuildVisibleItems();
+                RefreshItemInspection();
             }
         }
 
@@ -629,7 +631,7 @@ namespace CompanionGearUpgrades.UI
         {
             _slot = option.Slot;
             _selectedCandidateId = null;
-            _hoveredCandidate = null;
+            ClearHoveredCandidate();
             _allItems.Clear();
 
             foreach (ItemObject item in _service.GetCompatibleItems(_slot))
@@ -656,7 +658,7 @@ namespace CompanionGearUpgrades.UI
         private void SelectFilter(GearItemFilterOptionViewModel option)
         {
             _selectedItemTypeFilter = option.ItemTypeName;
-            _hoveredCandidate = null;
+            ClearHoveredCandidate();
 
             foreach (GearItemFilterOptionViewModel filter in _filters)
                 filter.SetSelected(string.Equals(filter.ItemTypeName, _selectedItemTypeFilter, StringComparison.Ordinal));
@@ -859,18 +861,30 @@ namespace CompanionGearUpgrades.UI
             RefreshItemInspection();
         }
 
+        private void ClearHoveredCandidate()
+        {
+            if (_hoveredCandidate != null)
+                _hoveredCandidate.SetHovered(false);
+
+            _hoveredCandidate = null;
+        }
+
         private void RefreshItemInspection()
         {
             ItemObject configuredItem = FindItem(GetWorkingSlotId(_slot));
-            ItemObject inspectedItem = GetTooltipItem(configuredItem);
-            ItemObject previewItem = GetPreviewItem(configuredItem);
+            GearItemOptionViewModel selectedCandidate = FindCandidate(_selectedCandidateId);
+            ItemObject selectedItem = selectedCandidate != null ? selectedCandidate.Item : null;
+            ItemObject inspectedItem = GetTooltipItem(configuredItem, selectedItem);
+            ItemObject previewItem = GetPreviewItem(configuredItem, selectedItem);
             bool hasDistinctHoveredItem = _hoveredCandidate != null &&
                 configuredItem != null &&
-                !string.Equals(_hoveredCandidate.ItemId, configuredItem.StringId, StringComparison.Ordinal);
+                !string.Equals(_hoveredCandidate.ItemId, configuredItem.StringId, StringComparison.Ordinal) &&
+                (selectedItem == null ||
+                    !string.Equals(_hoveredCandidate.ItemId, selectedItem.StringId, StringComparison.Ordinal));
 
             _inspectionTooltip.SetItem(inspectedItem);
             _configuredTooltip.SetItem(hasDistinctHoveredItem ? configuredItem : null);
-            RebuildComparison(inspectedItem, configuredItem);
+            RebuildComparison(inspectedItem, hasDistinctHoveredItem ? configuredItem : null);
             SetPreviewItem(previewItem);
 
             OnPropertyChanged(nameof(HasInspectionItem));
@@ -879,21 +893,20 @@ namespace CompanionGearUpgrades.UI
             OnPropertyChanged(nameof(HasHoveredComparison));
         }
 
-        private ItemObject GetTooltipItem(ItemObject configuredItem)
+        private ItemObject GetTooltipItem(ItemObject configuredItem, ItemObject selectedItem)
         {
             if (_hoveredCandidate != null)
                 return _hoveredCandidate.Item;
 
-            return configuredItem;
+            return selectedItem ?? configuredItem;
         }
 
-        private ItemObject GetPreviewItem(ItemObject configuredItem)
+        private ItemObject GetPreviewItem(ItemObject configuredItem, ItemObject selectedItem)
         {
             if (_hoveredCandidate != null)
                 return _hoveredCandidate.Item;
 
-            GearItemOptionViewModel selected = FindCandidate(_selectedCandidateId);
-            return selected != null ? selected.Item : configuredItem;
+            return selectedItem ?? configuredItem;
         }
 
         private void RebuildComparison(ItemObject inspectedItem, ItemObject configuredItem)
@@ -1116,7 +1129,7 @@ namespace CompanionGearUpgrades.UI
 
         private void ClearItemInspection()
         {
-            _hoveredCandidate = null;
+            ClearHoveredCandidate();
             _inspectionTooltip.SetItem(null);
             _configuredTooltip.SetItem(null);
             _comparisonStats.Clear();
@@ -1404,6 +1417,7 @@ namespace CompanionGearUpgrades.UI
     public sealed class GearItemFilterOptionViewModel : ViewModel
     {
         private readonly Action<GearItemFilterOptionViewModel> _onSelected;
+        private bool _isHovered;
         private bool _isSelected;
 
         public GearItemFilterOptionViewModel(string itemTypeName, string name, Action<GearItemFilterOptionViewModel> onSelected)
@@ -1417,6 +1431,20 @@ namespace CompanionGearUpgrades.UI
 
         [DataSourceProperty]
         public string Name { get; private set; }
+
+        [DataSourceProperty]
+        public bool IsHovered
+        {
+            get { return _isHovered; }
+            private set
+            {
+                if (_isHovered == value)
+                    return;
+
+                _isHovered = value;
+                OnPropertyChanged(nameof(IsHovered));
+            }
+        }
 
         [DataSourceProperty]
         public bool IsSelected
@@ -1435,6 +1463,16 @@ namespace CompanionGearUpgrades.UI
         public void ExecuteSelect()
         {
             _onSelected?.Invoke(this);
+        }
+
+        public void ExecuteHoverBegin()
+        {
+            IsHovered = true;
+        }
+
+        public void ExecuteHoverEnd()
+        {
+            IsHovered = false;
         }
 
         public void SetSelected(bool selected)
@@ -1490,6 +1528,7 @@ namespace CompanionGearUpgrades.UI
         private readonly Action<GearItemOptionViewModel> _onSelected;
         private readonly Action<GearItemOptionViewModel> _onHoverBegin;
         private readonly Action<GearItemOptionViewModel> _onHoverEnd;
+        private bool _isHovered;
         private bool _isSelected;
 
         public GearItemOptionViewModel(
@@ -1532,6 +1571,20 @@ namespace CompanionGearUpgrades.UI
         public string DisplayText => $"{ItemName}  [{ItemId}]";
 
         [DataSourceProperty]
+        public bool IsHovered
+        {
+            get { return _isHovered; }
+            private set
+            {
+                if (_isHovered == value)
+                    return;
+
+                _isHovered = value;
+                OnPropertyChanged(nameof(IsHovered));
+            }
+        }
+
+        [DataSourceProperty]
         public bool IsSelected
         {
             get { return _isSelected; }
@@ -1552,17 +1605,24 @@ namespace CompanionGearUpgrades.UI
 
         public void ExecuteHoverBegin()
         {
+            IsHovered = true;
             _onHoverBegin?.Invoke(this);
         }
 
         public void ExecuteHoverEnd()
         {
+            IsHovered = false;
             _onHoverEnd?.Invoke(this);
         }
 
         public void SetSelected(bool selected)
         {
             IsSelected = selected;
+        }
+
+        public void SetHovered(bool hovered)
+        {
+            IsHovered = hovered;
         }
     }
 
