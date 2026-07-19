@@ -378,6 +378,8 @@ namespace CompanionGearUpgrades.UI
             _working = null;
             _selectedCandidateId = null;
             ClearItemInspection();
+            foreach (GearRoleOptionViewModel roleOption in _roles)
+                roleOption.SetSelected(false);
             _page = Page.Roles;
             StatusText = "Select a role and tier to edit a preset.";
             NotifyPageChanged();
@@ -593,6 +595,9 @@ namespace CompanionGearUpgrades.UI
         private void SelectRole(GearRoleOptionViewModel option)
         {
             _role = option.Role;
+            foreach (GearRoleOptionViewModel roleOption in _roles)
+                roleOption.SetSelected(roleOption.Role == _role);
+
             _tiers.Clear();
             for (int tier = 1; tier <= 3; tier++)
                 _tiers.Add(new GearTierOptionViewModel(tier, _service.GetEffectiveCost(_role, tier), SelectTier));
@@ -610,6 +615,9 @@ namespace CompanionGearUpgrades.UI
             }
 
             _tier = option.Tier;
+            foreach (GearTierOptionViewModel tierOption in _tiers)
+                tierOption.SetSelected(tierOption.Tier == _tier);
+
             _working = _service.BuildEffectiveSnapshot(_role, _tier, preset);
             _categories.Clear();
             _categories.Add(new GearCategoryOptionViewModel(GearPresetCategory.Weapons, "Weapons", SelectCategory));
@@ -621,6 +629,9 @@ namespace CompanionGearUpgrades.UI
         private void SelectCategory(GearCategoryOptionViewModel option)
         {
             _category = option.Category;
+            foreach (GearCategoryOptionViewModel categoryOption in _categories)
+                categoryOption.SetSelected(categoryOption.Category == _category);
+
             _slots.Clear();
 
             foreach (EquipmentIndex slot in GetSlotsForCategory(_category))
@@ -632,6 +643,9 @@ namespace CompanionGearUpgrades.UI
         private void SelectSlot(GearSlotOptionViewModel option)
         {
             _slot = option.Slot;
+            foreach (GearSlotOptionViewModel slotOption in _slots)
+                slotOption.SetSelected(slotOption.Slot == _slot);
+
             _selectedCandidateId = null;
             ClearHoveredCandidate();
             _allItems.Clear();
@@ -1297,6 +1311,7 @@ namespace CompanionGearUpgrades.UI
     public sealed class GearRoleOptionViewModel : ViewModel
     {
         private readonly Action<GearRoleOptionViewModel> _onSelected;
+        private bool _isSelected;
 
         public GearRoleOptionViewModel(GearRole role, string name, Action<GearRoleOptionViewModel> onSelected)
         {
@@ -1310,15 +1325,35 @@ namespace CompanionGearUpgrades.UI
         [DataSourceProperty]
         public string Name { get; private set; }
 
+        [DataSourceProperty]
+        public bool IsSelected
+        {
+            get { return _isSelected; }
+            private set
+            {
+                if (_isSelected == value)
+                    return;
+
+                _isSelected = value;
+                OnPropertyChanged(nameof(IsSelected));
+            }
+        }
+
         public void ExecuteSelect()
         {
             _onSelected?.Invoke(this);
+        }
+
+        public void SetSelected(bool selected)
+        {
+            IsSelected = selected;
         }
     }
 
     public sealed class GearTierOptionViewModel : ViewModel
     {
         private readonly Action<GearTierOptionViewModel> _onSelected;
+        private bool _isSelected;
 
         public GearTierOptionViewModel(int tier, int cost, Action<GearTierOptionViewModel> onSelected)
         {
@@ -1338,17 +1373,37 @@ namespace CompanionGearUpgrades.UI
         [DataSourceProperty]
         public string TierCostText => $"{Cost} gold";
 
+        [DataSourceProperty]
+        public bool IsSelected
+        {
+            get { return _isSelected; }
+            private set
+            {
+                if (_isSelected == value)
+                    return;
+
+                _isSelected = value;
+                OnPropertyChanged(nameof(IsSelected));
+            }
+        }
+
         private int Cost { get; set; }
 
         public void ExecuteSelect()
         {
             _onSelected?.Invoke(this);
         }
+
+        public void SetSelected(bool selected)
+        {
+            IsSelected = selected;
+        }
     }
 
     public sealed class GearCategoryOptionViewModel : ViewModel
     {
         private readonly Action<GearCategoryOptionViewModel> _onSelected;
+        private bool _isSelected;
 
         public GearCategoryOptionViewModel(GearPresetCategory category, string name, Action<GearCategoryOptionViewModel> onSelected)
         {
@@ -1366,9 +1421,28 @@ namespace CompanionGearUpgrades.UI
         [DataSourceProperty]
         public string IconBrush { get; private set; }
 
+        [DataSourceProperty]
+        public bool IsSelected
+        {
+            get { return _isSelected; }
+            private set
+            {
+                if (_isSelected == value)
+                    return;
+
+                _isSelected = value;
+                OnPropertyChanged(nameof(IsSelected));
+            }
+        }
+
         public void ExecuteSelect()
         {
             _onSelected?.Invoke(this);
+        }
+
+        public void SetSelected(bool selected)
+        {
+            IsSelected = selected;
         }
 
         private static string GetIconBrush(GearPresetCategory category)
@@ -1389,6 +1463,7 @@ namespace CompanionGearUpgrades.UI
     {
         private readonly Action<GearSlotOptionViewModel> _onSelected;
         private string _label;
+        private bool _isSelected;
 
         public GearSlotOptionViewModel(EquipmentIndex slot, string label, Action<GearSlotOptionViewModel> onSelected)
         {
@@ -1402,6 +1477,20 @@ namespace CompanionGearUpgrades.UI
         [DataSourceProperty]
         public string Name => _label;
 
+        [DataSourceProperty]
+        public bool IsSelected
+        {
+            get { return _isSelected; }
+            private set
+            {
+                if (_isSelected == value)
+                    return;
+
+                _isSelected = value;
+                OnPropertyChanged(nameof(IsSelected));
+            }
+        }
+
         public void SetLabel(string label)
         {
             if (string.Equals(_label, label, StringComparison.Ordinal))
@@ -1414,6 +1503,11 @@ namespace CompanionGearUpgrades.UI
         public void ExecuteSelect()
         {
             _onSelected?.Invoke(this);
+        }
+
+        public void SetSelected(bool selected)
+        {
+            IsSelected = selected;
         }
     }
 
