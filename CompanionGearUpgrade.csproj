@@ -139,5 +139,8 @@
     <Content Include="SubModule.xml" />
     <Content Include="GUI\PrefabExtensions\ClanEquipmentTab.xml" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="README.md" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
