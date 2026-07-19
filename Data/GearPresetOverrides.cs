@@ -13,9 +13,9 @@ namespace CompanionGearUpgrades.Data
     {
         // A persisted marker is required because removing an item must be
         // distinguishable from having no override (which means "use default").
-        public const string EmptySlotMarker = "__CGU_EMPTY_SLOT__";
+        private const string EmptySlotMarker = "__CGU_EMPTY_SLOT__";
 
-        public static readonly EquipmentIndex[] EditableSlots =
+        internal static readonly EquipmentIndex[] EditableSlots =
         {
             EquipmentIndex.Weapon0,
             EquipmentIndex.Weapon1,
@@ -30,8 +30,8 @@ namespace CompanionGearUpgrades.Data
             EquipmentIndex.HorseHarness
         };
 
-        private Dictionary<string, int> _costOverrides;
-        private Dictionary<string, string> _itemOverrides;
+        private readonly Dictionary<string, int> _costOverrides;
+        private readonly Dictionary<string, string> _itemOverrides;
 
         public GearPresetOverrides(Dictionary<string, int> costOverrides, Dictionary<string, string> itemOverrides)
         {
@@ -42,36 +42,31 @@ namespace CompanionGearUpgrades.Data
         public int GetEffectiveCost(GearRole role, int tier, int defaultCost)
         {
             int v;
-            return _costOverrides != null && _costOverrides.TryGetValue(CostKey(role, tier), out v) ? v : defaultCost;
+            return _costOverrides.TryGetValue(CostKey(role, tier), out v) ? v : defaultCost;
         }
 
-        public bool TryGetOverrideItemId(GearRole role, int tier, EquipmentIndex slot, out string itemId)
+        private bool TryGetOverrideItemId(GearRole role, int tier, EquipmentIndex slot, out string itemId)
         {
             itemId = null;
             string storedId;
-            if (_itemOverrides == null || !_itemOverrides.TryGetValue(ItemKey(role, tier, slot), out storedId))
+            if (!_itemOverrides.TryGetValue(ItemKey(role, tier, slot), out storedId))
                 return false;
 
             itemId = IsEmptyMarker(storedId) ? null : storedId;
             return true;
         }
 
-        public void SetCostOverride(GearRole role, int tier, int cost)
+        private void SetCostOverride(GearRole role, int tier, int cost)
         {
-            if (_costOverrides == null)
-                _costOverrides = new Dictionary<string, int>();
             _costOverrides[CostKey(role, tier)] = Math.Max(0, cost);
         }
 
-        public void ClearCostOverride(GearRole role, int tier)
+        private void ClearCostOverride(GearRole role, int tier)
         {
-            if (_costOverrides == null)
-                return;
-
             _costOverrides.Remove(CostKey(role, tier));
         }
 
-        public void SetItemOverride(GearRole role, int tier, EquipmentIndex slot, string itemId)
+        private void SetItemOverride(GearRole role, int tier, EquipmentIndex slot, string itemId)
         {
             if (string.IsNullOrEmpty(itemId))
             {
@@ -79,25 +74,16 @@ namespace CompanionGearUpgrades.Data
                 return;
             }
 
-            if (_itemOverrides == null)
-                _itemOverrides = new Dictionary<string, string>();
-
             _itemOverrides[ItemKey(role, tier, slot)] = itemId;
         }
 
-        public void SetSlotEmpty(GearRole role, int tier, EquipmentIndex slot)
+        private void SetSlotEmpty(GearRole role, int tier, EquipmentIndex slot)
         {
-            if (_itemOverrides == null)
-                _itemOverrides = new Dictionary<string, string>();
-
             _itemOverrides[ItemKey(role, tier, slot)] = EmptySlotMarker;
         }
 
-        public void ClearItemOverride(GearRole role, int tier, EquipmentIndex slot)
+        private void ClearItemOverride(GearRole role, int tier, EquipmentIndex slot)
         {
-            if (_itemOverrides == null)
-                return;
-
             _itemOverrides.Remove(ItemKey(role, tier, slot));
         }
 
@@ -137,7 +123,7 @@ namespace CompanionGearUpgrades.Data
             foreach (EquipmentIndex slot in EditableSlots)
             {
                 string defaultId;
-                bool hasDefault = defaultPreset.Slots.TryGetValue(slot, out defaultId);
+                defaultPreset.Slots.TryGetValue(slot, out defaultId);
                 string newId;
 
                 // A slot absent from a snapshot was not edited. This matters
@@ -158,8 +144,8 @@ namespace CompanionGearUpgrades.Data
             }
         }
 
-        public static string CostKey(GearRole role, int tier) => $"{role}:{tier}:cost";
-        public static string ItemKey(GearRole role, int tier, EquipmentIndex slot) => $"{role}:{tier}:{(int)slot}";
+        private static string CostKey(GearRole role, int tier) => $"{role}:{tier}:cost";
+        private static string ItemKey(GearRole role, int tier, EquipmentIndex slot) => $"{role}:{tier}:{(int)slot}";
 
         private static bool IsEmptyMarker(string value)
         {
@@ -167,22 +153,4 @@ namespace CompanionGearUpgrades.Data
         }
     }
 
-    public sealed class GearPresetSnapshot
-    {
-        public int Cost { get; private set; }
-        public Dictionary<EquipmentIndex, string> Slots { get; private set; }
-
-        public GearPresetSnapshot(int cost, Dictionary<EquipmentIndex, string> slots)
-        {
-            Cost = cost;
-            Slots = slots != null
-                ? new Dictionary<EquipmentIndex, string>(slots)
-                : new Dictionary<EquipmentIndex, string>();
-        }
-
-        public GearPresetSnapshot Clone()
-        {
-            return new GearPresetSnapshot(Cost, Slots);
-        }
-    }
 }

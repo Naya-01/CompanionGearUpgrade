@@ -440,7 +440,7 @@
 								</ButtonWidget>
 								<ListPanel WidthSizePolicy="CoverChildren" HeightSizePolicy="StretchToParent" HorizontalAlignment="Right" MarginRight="10" StackLayout.LayoutMethod="HorizontalLeftToRight">
 									<Children>
-										<ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="180" SuggestedHeight="48" VerticalAlignment="Center" Brush="Popup.Done.Button.NineGrid" Command.Click="ExecuteSave" DoNotPassEventsToChildren="true" UpdateChildrenStates="true" IsVisible="@IsTierEditorMainVisible">
+										<ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="180" SuggestedHeight="48" VerticalAlignment="Center" Brush="Popup.Done.Button.NineGrid" Command.Click="ExecuteSave" DoNotPassEventsToChildren="true" UpdateChildrenStates="true" IsVisible="@IsCategorySelectionVisible">
 											<Children>
 												<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Text="Save" HorizontalAlignment="Center" VerticalAlignment="Center" Brush="Popup.Button.Text" Brush.FontSize="17" Brush.TextHorizontalAlignment="Center" />
 												<HintWidget DataSource="{SaveHint}" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Command.HoverBegin="ExecuteBeginHint" Command.HoverEnd="ExecuteEndHint" IsDisabled="true" />

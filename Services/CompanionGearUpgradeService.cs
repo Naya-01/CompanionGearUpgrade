@@ -22,13 +22,8 @@ namespace CompanionGearUpgrades.Services
             Dictionary<(GearRole role, int tier), GearPreset> defaultPresets,
             GearPresetOverrides overrides)
         {
-            _defaultPresets = defaultPresets;
-            _overrides = overrides;
-        }
-
-        public bool TryGetDefaultPreset(GearRole role, int tier, out GearPreset preset)
-        {
-            return _defaultPresets.TryGetValue((role, tier), out preset);
+            _defaultPresets = defaultPresets ?? throw new ArgumentNullException(nameof(defaultPresets));
+            _overrides = overrides ?? throw new ArgumentNullException(nameof(overrides));
         }
 
         public GearPreset GetDefaultPresetOrNull(GearRole role, int tier)
@@ -43,7 +38,7 @@ namespace CompanionGearUpgrades.Services
             if (!_defaultPresets.TryGetValue((role, tier), out p))
                 return 0;
 
-            return _overrides != null ? _overrides.GetEffectiveCost(role, tier, p.Cost) : p.Cost;
+            return _overrides.GetEffectiveCost(role, tier, p.Cost);
         }
 
         public bool SetTierCostVar(GearRole role, int tier, string varName)
@@ -51,7 +46,7 @@ namespace CompanionGearUpgrades.Services
             GearPreset preset;
             if (_defaultPresets.TryGetValue((role, tier), out preset))
             {
-                int cost = (_overrides != null) ? _overrides.GetEffectiveCost(role, tier, preset.Cost) : preset.Cost;
+                int cost = _overrides.GetEffectiveCost(role, tier, preset.Cost);
                 MBTextManager.SetTextVariable(varName, cost);
                 return true;
             }
@@ -73,7 +68,7 @@ namespace CompanionGearUpgrades.Services
                 return;
             }
 
-            int cost = (_overrides != null) ? _overrides.GetEffectiveCost(role, tier, preset.Cost) : preset.Cost;
+            int cost = _overrides.GetEffectiveCost(role, tier, preset.Cost);
             if (Hero.MainHero.Gold < cost)
             {
                 InformationManager.DisplayMessage(new InformationMessage("Not enough gold."));
@@ -98,9 +93,7 @@ namespace CompanionGearUpgrades.Services
 
         public GearPresetSnapshot BuildEffectiveSnapshot(GearRole role, int tier, GearPreset defaultPreset)
         {
-            return (_overrides != null)
-                ? _overrides.CaptureSnapshot(role, tier, defaultPreset)
-                : new GearPresetSnapshot(defaultPreset.Cost, new Dictionary<EquipmentIndex, string>(defaultPreset.Slots));
+            return _overrides.CaptureSnapshot(role, tier, defaultPreset);
         }
 
         public List<ItemObject> GetCompatibleItems(EquipmentIndex slot)
@@ -115,14 +108,6 @@ namespace CompanionGearUpgrades.Services
 
                 list.Add(item);
             }
-
-            list.Sort((a, b) =>
-            {
-                int nameComparison = string.Compare(a.Name.ToString(), b.Name.ToString(), StringComparison.OrdinalIgnoreCase);
-                return nameComparison != 0
-                    ? nameComparison
-                    : string.Compare(a.StringId, b.StringId, StringComparison.OrdinalIgnoreCase);
-            });
 
             return list;
         }

@@ -2,7 +2,6 @@
 using CompanionGearUpgrades.Domain;
 using CompanionGearUpgrades.Services;
 using TaleWorlds.CampaignSystem;
-using TaleWorlds.Core;
 using TaleWorlds.Library;
 
 namespace CompanionGearUpgrades.Dialog

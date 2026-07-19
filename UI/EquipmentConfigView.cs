@@ -3,7 +3,6 @@ using CompanionGearUpgrades.Services;
 using SandBox.GauntletUI;
 using System;
 using TaleWorlds.CampaignSystem;
-using TaleWorlds.Core;
 using TaleWorlds.Engine.GauntletUI;
 using TaleWorlds.GauntletUI.BaseTypes;
 using TaleWorlds.Library;
@@ -26,12 +25,11 @@ namespace CompanionGearUpgrades.UI
         }
 
         private const string LayerName = "CompanionGearUpgradeEquipmentConfig";
-        private static EquipmentConfigView _current;
 
         private readonly CompanionGearUpgradeService _service;
         private readonly GearPresetOverrides _overrides;
 
-        private GlobalLayer _globalLayer;
+        private EquipmentConfigGlobalLayer _globalLayer;
         private GauntletLayer _layer;
         private GauntletMovieIdentifier _movie;
         private GearPresetConfigViewModel _viewModel;
@@ -40,7 +38,6 @@ namespace CompanionGearUpgrades.UI
         private bool _isHostScreenVisible;
         private bool _isLayerModal;
         private bool _releaseMovieOnNextTick;
-        private bool _openConversationOnNextTick;
         private ScreenBase _pendingConversationScreen;
 
         public EquipmentConfigView(CompanionGearUpgradeService service, GearPresetOverrides overrides)
@@ -54,9 +51,8 @@ namespace CompanionGearUpgrades.UI
             if (_globalLayer != null)
                 return;
 
-            _current = this;
             _layer = new GauntletLayer(LayerName, 1000, false);
-            _globalLayer = new EquipmentGlobalLayer(_layer, OnGauntletTick);
+            _globalLayer = new EquipmentConfigGlobalLayer(_layer, OnGauntletTick);
 
             ScreenManager.OnPushScreen += OnPushScreen;
             ScreenManager.OnPopScreen += OnPopScreen;
@@ -68,7 +64,6 @@ namespace CompanionGearUpgrades.UI
             ScreenManager.OnPushScreen -= OnPushScreen;
             ScreenManager.OnPopScreen -= OnPopScreen;
 
-            _openConversationOnNextTick = false;
             _pendingConversationScreen = null;
             SetLayerInteraction(false);
 
@@ -80,21 +75,9 @@ namespace CompanionGearUpgrades.UI
             _layer = null;
             _globalLayer = null;
 
-            if (ReferenceEquals(_current, this))
-                _current = null;
         }
 
-        public static bool OpenClanConfiguration()
-        {
-            return _current != null && _current.OpenClanConfigurationInternal();
-        }
-
-        public static bool OpenConversationConfiguration()
-        {
-            return _current != null && _current.QueueConversationConfiguration();
-        }
-
-        private bool OpenClanConfigurationInternal()
+        public bool OpenClanConfiguration()
         {
             ScreenBase screen = ScreenManager.TopScreen;
             if (!IsClanScreen(screen))
@@ -103,7 +86,7 @@ namespace CompanionGearUpgrades.UI
             return OpenConfigurationInternal(ConfigurationHost.Clan, screen);
         }
 
-        private bool QueueConversationConfiguration()
+        public bool OpenConversationConfiguration()
         {
             ScreenBase screen = ScreenManager.TopScreen;
             if (_layer == null || screen == null || !IsConversationInProgress())
@@ -113,7 +96,6 @@ namespace CompanionGearUpgrades.UI
             // next global-layer tick lets Bannerlord finish DoOptionContinue
             // before this layer takes focus.
             _pendingConversationScreen = screen;
-            _openConversationOnNextTick = true;
             return true;
         }
 
@@ -261,10 +243,9 @@ namespace CompanionGearUpgrades.UI
 
         private void OnGauntletTick()
         {
-            if (_openConversationOnNextTick)
+            if (_pendingConversationScreen != null)
             {
                 ScreenBase conversationScreen = _pendingConversationScreen;
-                _openConversationOnNextTick = false;
                 _pendingConversationScreen = null;
 
                 if (!OpenConfigurationInternal(ConfigurationHost.Conversation, conversationScreen))
@@ -337,21 +318,5 @@ namespace CompanionGearUpgrades.UI
             _isHostScreenVisible = false;
         }
 
-        private sealed class EquipmentGlobalLayer : GlobalLayer
-        {
-            private readonly Action _onTick;
-
-            public EquipmentGlobalLayer(ScreenLayer layer, Action onTick)
-            {
-                Layer = layer;
-                _onTick = onTick;
-            }
-
-            protected override void OnTick(float dt)
-            {
-                base.OnTick(dt);
-                _onTick?.Invoke();
-            }
-        }
     }
 }

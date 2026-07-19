@@ -1,7 +1,6 @@
 using HarmonyLib;
 using CompanionGearUpgrades.Behaviors;
 using TaleWorlds.CampaignSystem.ViewModelCollection.ClanManagement;
-using TaleWorlds.Core;
 using TaleWorlds.Library;
 
 namespace CompanionGearUpgrades.UI

@@ -12,7 +12,6 @@ namespace CompanionGearUpgrades.Behaviors
         // Saved in the savegame via SyncData (simple types only)
         private Dictionary<string, int> _costOverrides;
         private Dictionary<string, string> _itemOverrides;
-        private CompanionGearUpgradeDialog _dialog;
         private static EquipmentConfigView _equipmentConfigView;
 
         public CompanionGearUpgradeBehavior()
@@ -43,8 +42,8 @@ namespace CompanionGearUpgrades.Behaviors
             var overrides = new GearPresetOverrides(_costOverrides, _itemOverrides);
 
             var service = new CompanionGearUpgradeService(defaults, overrides);
-            _dialog = new CompanionGearUpgradeDialog(service);
-            _dialog.AddDialogs(starter);
+            var dialog = new CompanionGearUpgradeDialog(service);
+            dialog.AddDialogs(starter);
 
             // Clan and conversation configuration share this exact Gauntlet
             // view, service and persisted override store.
@@ -54,27 +53,18 @@ namespace CompanionGearUpgrades.Behaviors
 
         public static bool TryOpenClanPresetConfiguration()
         {
-            if (_equipmentConfigView == null)
-                return false;
-
-            return EquipmentConfigView.OpenClanConfiguration();
+            return _equipmentConfigView != null && _equipmentConfigView.OpenClanConfiguration();
         }
 
         public static bool TryOpenConversationPresetConfiguration()
         {
-            if (_equipmentConfigView == null)
-                return false;
-
-            return EquipmentConfigView.OpenConversationConfiguration();
+            return _equipmentConfigView != null && _equipmentConfigView.OpenConversationConfiguration();
         }
 
         public static void ClearPresetConfiguration()
         {
-            if (_equipmentConfigView != null)
-            {
-                _equipmentConfigView.Dispose();
-                _equipmentConfigView = null;
-            }
+            _equipmentConfigView?.Dispose();
+            _equipmentConfigView = null;
         }
     }
 }
