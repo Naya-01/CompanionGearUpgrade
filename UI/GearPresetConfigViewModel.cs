@@ -3,7 +3,9 @@ using CompanionGearUpgrades.Domain;
 using CompanionGearUpgrades.Services;
 using System;
 using System.Collections.Generic;
+using TaleWorlds.CampaignSystem.ViewModelCollection.Inventory;
 using TaleWorlds.Core;
+using TaleWorlds.Core.ViewModelCollection.ImageIdentifiers;
 using TaleWorlds.Library;
 using TaleWorlds.ObjectSystem;
 
@@ -40,6 +42,12 @@ namespace CompanionGearUpgrades.UI
         private readonly MBBindingList<GearCategoryOptionViewModel> _categories;
         private readonly MBBindingList<GearSlotOptionViewModel> _slots;
         private readonly MBBindingList<GearItemOptionViewModel> _items;
+        private readonly List<GearItemOptionViewModel> _allItems;
+        private readonly MBBindingList<GearItemFilterOptionViewModel> _filters;
+        private readonly MBBindingList<GearItemComparisonViewModel> _comparisonStats;
+        private readonly ItemPreviewVM _itemPreview;
+        private readonly GearItemTooltipViewModel _inspectionTooltip;
+        private readonly GearItemTooltipViewModel _configuredTooltip;
 
         private GearRole _role;
         private int _tier;
@@ -47,6 +55,10 @@ namespace CompanionGearUpgrades.UI
         private EquipmentIndex _slot;
         private GearPresetSnapshot _working;
         private string _selectedCandidateId;
+        private string _selectedItemTypeFilter;
+        private string _itemSearchText;
+        private string _previewItemId;
+        private GearItemOptionViewModel _hoveredCandidate;
         private Page _page;
         private bool _isWindowOpen;
         private bool _isClanScreenVisible;
@@ -66,6 +78,12 @@ namespace CompanionGearUpgrades.UI
             _categories = new MBBindingList<GearCategoryOptionViewModel>();
             _slots = new MBBindingList<GearSlotOptionViewModel>();
             _items = new MBBindingList<GearItemOptionViewModel>();
+            _allItems = new List<GearItemOptionViewModel>();
+            _filters = new MBBindingList<GearItemFilterOptionViewModel>();
+            _comparisonStats = new MBBindingList<GearItemComparisonViewModel>();
+            _itemPreview = new ItemPreviewVM(OnItemPreviewClosed);
+            _inspectionTooltip = new GearItemTooltipViewModel();
+            _configuredTooltip = new GearItemTooltipViewModel();
             _statusText = "Select a role and tier to edit a preset.";
             _page = Page.Roles;
 
@@ -88,6 +106,55 @@ namespace CompanionGearUpgrades.UI
 
         [DataSourceProperty]
         public MBBindingList<GearItemOptionViewModel> ItemOptions => _items;
+
+        [DataSourceProperty]
+        public MBBindingList<GearItemFilterOptionViewModel> FilterOptions => _filters;
+
+        [DataSourceProperty]
+        public ItemPreviewVM ItemPreview => _itemPreview;
+
+        [DataSourceProperty]
+        public GearItemTooltipViewModel InspectionTooltip => _inspectionTooltip;
+
+        [DataSourceProperty]
+        public GearItemTooltipViewModel ConfiguredTooltip => _configuredTooltip;
+
+        [DataSourceProperty]
+        public MBBindingList<GearItemComparisonViewModel> ComparisonStats => _comparisonStats;
+
+        [DataSourceProperty]
+        public bool HasPreviewItem => !string.IsNullOrEmpty(_previewItemId);
+
+        [DataSourceProperty]
+        public bool HasInspectionItem => _inspectionTooltip.HasItem;
+
+        [DataSourceProperty]
+        public bool HasComparison => _comparisonStats.Count > 0;
+
+        [DataSourceProperty]
+        public string ItemSearchText
+        {
+            get { return _itemSearchText; }
+            set
+            {
+                string searchText = value ?? string.Empty;
+                if (string.Equals(_itemSearchText, searchText, StringComparison.Ordinal))
+                    return;
+
+                _itemSearchText = searchText;
+                OnPropertyChanged(nameof(ItemSearchText));
+                RebuildVisibleItems();
+            }
+        }
+
+        [DataSourceProperty]
+        public string SearchPlaceholderText => "Search by name or StringId";
+
+        [DataSourceProperty]
+        public string ItemCountText => $"{_items.Count} / {_allItems.Count} items";
+
+        [DataSourceProperty]
+        public bool HasVisibleItems => _items.Count > 0;
 
         [DataSourceProperty]
         public bool IsWindowOpen
@@ -223,6 +290,7 @@ namespace CompanionGearUpgrades.UI
         {
             _working = null;
             _selectedCandidateId = null;
+            ClearItemInspection();
             _page = Page.Roles;
             StatusText = "Select a role and tier to edit a preset.";
             NotifyPageChanged();
@@ -269,6 +337,7 @@ namespace CompanionGearUpgrades.UI
             _overrides.CommitSnapshot(_role, _tier, defaultPreset, _working);
             StatusText = "Saved to the campaign overrides.";
             _working = null;
+            ClearItemInspection();
             IsWindowOpen = false;
         }
 
@@ -289,6 +358,7 @@ namespace CompanionGearUpgrades.UI
             _selectedCandidateId = null;
             RefreshSlotLabels();
             NotifyCurrentItemChanged();
+            RefreshItemInspection();
             StatusText = $"{GetSlotName(_slot)} changed in the temporary snapshot.";
         }
 
@@ -303,6 +373,7 @@ namespace CompanionGearUpgrades.UI
             _selectedCandidateId = null;
             RefreshSlotLabels();
             NotifyCurrentItemChanged();
+            RefreshItemInspection();
             StatusText = $"{GetSlotName(_slot)} will be empty after Save.";
         }
 
@@ -349,27 +420,94 @@ namespace CompanionGearUpgrades.UI
         {
             _slot = option.Slot;
             _selectedCandidateId = null;
-            _items.Clear();
+            _hoveredCandidate = null;
+            _allItems.Clear();
 
             foreach (ItemObject item in _service.GetCompatibleItems(_slot))
-                _items.Add(new GearItemOptionViewModel(item, HighlightCandidate));
+                _allItems.Add(new GearItemOptionViewModel(item, HighlightCandidate, BeginCandidateInspection, EndCandidateInspection));
 
+            BuildFilters();
+            RebuildVisibleItems();
             NotifyCurrentItemChanged();
             NotifyCandidateChanged();
+            RefreshItemInspection();
             SetPage(Page.Items);
         }
 
         private void HighlightCandidate(GearItemOptionViewModel option)
         {
             _selectedCandidateId = option.ItemId;
-            foreach (GearItemOptionViewModel item in _items)
+            foreach (GearItemOptionViewModel item in _allItems)
                 item.SetSelected(string.Equals(item.ItemId, _selectedCandidateId, StringComparison.Ordinal));
 
             NotifyCandidateChanged();
+            RefreshItemInspection();
+        }
+
+        private void SelectFilter(GearItemFilterOptionViewModel option)
+        {
+            _selectedItemTypeFilter = option.ItemTypeName;
+            _hoveredCandidate = null;
+
+            foreach (GearItemFilterOptionViewModel filter in _filters)
+                filter.SetSelected(string.Equals(filter.ItemTypeName, _selectedItemTypeFilter, StringComparison.Ordinal));
+
+            RebuildVisibleItems();
+            RefreshItemInspection();
+        }
+
+        private void BuildFilters()
+        {
+            _filters.Clear();
+            _selectedItemTypeFilter = null;
+            ItemSearchText = string.Empty;
+            _filters.Add(new GearItemFilterOptionViewModel(null, "All", SelectFilter));
+
+            HashSet<string> availableTypes = new HashSet<string>(StringComparer.Ordinal);
+            foreach (GearItemOptionViewModel item in _allItems)
+                availableTypes.Add(item.ItemTypeName);
+
+            foreach (string itemTypeName in GetOrderedItemTypeNames())
+            {
+                if (availableTypes.Remove(itemTypeName))
+                    _filters.Add(new GearItemFilterOptionViewModel(itemTypeName, GetItemTypeDisplayName(itemTypeName), SelectFilter));
+            }
+
+            List<string> remainingTypes = new List<string>(availableTypes);
+            remainingTypes.Sort(StringComparer.Ordinal);
+            foreach (string itemTypeName in remainingTypes)
+                _filters.Add(new GearItemFilterOptionViewModel(itemTypeName, GetItemTypeDisplayName(itemTypeName), SelectFilter));
+
+            foreach (GearItemFilterOptionViewModel filter in _filters)
+                filter.SetSelected(filter.ItemTypeName == null);
+        }
+
+        private void RebuildVisibleItems()
+        {
+            _items.Clear();
+            foreach (GearItemOptionViewModel item in _allItems)
+            {
+                if (!string.IsNullOrEmpty(_selectedItemTypeFilter) &&
+                    !string.Equals(item.ItemTypeName, _selectedItemTypeFilter, StringComparison.Ordinal))
+                    continue;
+
+                if (!string.IsNullOrWhiteSpace(_itemSearchText) &&
+                    item.ItemName.IndexOf(_itemSearchText, StringComparison.OrdinalIgnoreCase) < 0 &&
+                    item.ItemId.IndexOf(_itemSearchText, StringComparison.OrdinalIgnoreCase) < 0)
+                    continue;
+
+                _items.Add(item);
+            }
+
+            OnPropertyChanged(nameof(ItemCountText));
+            OnPropertyChanged(nameof(HasVisibleItems));
         }
 
         private void SetPage(Page page)
         {
+            if (_page == Page.Items && page != Page.Items)
+                ClearItemInspection();
+
             _page = page;
             NotifyPageChanged();
         }
@@ -425,7 +563,7 @@ namespace CompanionGearUpgrades.UI
             if (string.IsNullOrEmpty(id))
                 return null;
 
-            foreach (GearItemOptionViewModel item in _items)
+            foreach (GearItemOptionViewModel item in _allItems)
             {
                 if (string.Equals(item.ItemId, id, StringComparison.Ordinal))
                     return item;
@@ -445,7 +583,170 @@ namespace CompanionGearUpgrades.UI
         {
             _working = null;
             _selectedCandidateId = null;
+            ClearItemInspection();
             IsWindowOpen = false;
+        }
+
+        /// <summary>
+        /// The preview follows the hovered row first, then the selected row,
+        /// and finally the item already configured in the temporary preset.
+        /// This keeps one native ItemPreviewVM alive for the whole window.
+        /// </summary>
+        private void BeginCandidateInspection(GearItemOptionViewModel option)
+        {
+            _hoveredCandidate = option;
+            RefreshItemInspection();
+        }
+
+        private void EndCandidateInspection(GearItemOptionViewModel option)
+        {
+            if (!ReferenceEquals(_hoveredCandidate, option))
+                return;
+
+            _hoveredCandidate = null;
+            RefreshItemInspection();
+        }
+
+        private void RefreshItemInspection()
+        {
+            ItemObject configuredItem = FindItem(GetWorkingSlotId(_slot));
+            ItemObject inspectedItem = GetInspectedItem(configuredItem);
+
+            _inspectionTooltip.SetItem(inspectedItem);
+            _configuredTooltip.SetItem(configuredItem);
+            RebuildComparison(inspectedItem, configuredItem);
+            SetPreviewItem(inspectedItem);
+
+            OnPropertyChanged(nameof(HasInspectionItem));
+            OnPropertyChanged(nameof(HasComparison));
+        }
+
+        private ItemObject GetInspectedItem(ItemObject configuredItem)
+        {
+            if (_hoveredCandidate != null)
+                return _hoveredCandidate.Item;
+
+            GearItemOptionViewModel selected = FindCandidate(_selectedCandidateId);
+            return selected != null ? selected.Item : configuredItem;
+        }
+
+        private void RebuildComparison(ItemObject inspectedItem, ItemObject configuredItem)
+        {
+            _comparisonStats.Clear();
+
+            if (inspectedItem == null || configuredItem == null ||
+                string.Equals(inspectedItem.StringId, configuredItem.StringId, StringComparison.Ordinal))
+                return;
+
+            Dictionary<string, GearItemStatValue> configuredStats = new Dictionary<string, GearItemStatValue>(StringComparer.Ordinal);
+            foreach (GearItemStatValue stat in GearItemTooltipViewModel.GetStats(configuredItem))
+                configuredStats[stat.Label] = stat;
+
+            HashSet<string> addedLabels = new HashSet<string>(StringComparer.Ordinal);
+            foreach (GearItemStatValue inspectedStat in GearItemTooltipViewModel.GetStats(inspectedItem))
+            {
+                GearItemStatValue configuredStat;
+                configuredStats.TryGetValue(inspectedStat.Label, out configuredStat);
+                _comparisonStats.Add(new GearItemComparisonViewModel(inspectedStat, configuredStat));
+                addedLabels.Add(inspectedStat.Label);
+            }
+
+            foreach (GearItemStatValue configuredStat in GearItemTooltipViewModel.GetStats(configuredItem))
+            {
+                if (!addedLabels.Contains(configuredStat.Label))
+                    _comparisonStats.Add(new GearItemComparisonViewModel(null, configuredStat));
+            }
+        }
+
+        private void SetPreviewItem(ItemObject item)
+        {
+            string itemId = item != null ? item.StringId : null;
+            if (string.Equals(_previewItemId, itemId, StringComparison.Ordinal))
+                return;
+
+            _previewItemId = itemId;
+            if (item == null)
+                _itemPreview.Close();
+            else
+                _itemPreview.Open(new EquipmentElement(item));
+
+            OnPropertyChanged(nameof(HasPreviewItem));
+        }
+
+        private void ClearItemInspection()
+        {
+            _hoveredCandidate = null;
+            _inspectionTooltip.SetItem(null);
+            _configuredTooltip.SetItem(null);
+            _comparisonStats.Clear();
+            SetPreviewItem(null);
+
+            OnPropertyChanged(nameof(HasInspectionItem));
+            OnPropertyChanged(nameof(HasComparison));
+        }
+
+        private void OnItemPreviewClosed()
+        {
+            if (string.IsNullOrEmpty(_previewItemId))
+                return;
+
+            _previewItemId = null;
+            OnPropertyChanged(nameof(HasPreviewItem));
+        }
+
+        public override void OnFinalize()
+        {
+            ClearItemInspection();
+            _itemPreview.OnFinalize();
+            base.OnFinalize();
+        }
+
+        private static IEnumerable<string> GetOrderedItemTypeNames()
+        {
+            return new[]
+            {
+                "OneHandedWeapon",
+                "TwoHandedWeapon",
+                "Polearm",
+                "Bow",
+                "Crossbow",
+                "Thrown",
+                "Shield",
+                "Arrows",
+                "Bolts",
+                "Banner",
+                "HeadArmor",
+                "BodyArmor",
+                "Cape",
+                "HandArmor",
+                "LegArmor",
+                "Horse",
+                "HorseHarness"
+            };
+        }
+
+        private static string GetItemTypeDisplayName(string itemTypeName)
+        {
+            switch (itemTypeName)
+            {
+                case "OneHandedWeapon": return "One-handed";
+                case "TwoHandedWeapon": return "Two-handed";
+                case "Polearm": return "Polearms";
+                case "Bow": return "Bows";
+                case "Crossbow": return "Crossbows";
+                case "Thrown": return "Thrown";
+                case "Shield": return "Shields";
+                case "Arrows": return "Arrows";
+                case "Bolts": return "Bolts";
+                case "HeadArmor": return "Head";
+                case "BodyArmor": return "Body";
+                case "Cape": return "Capes";
+                case "HandArmor": return "Gloves";
+                case "LegArmor": return "Legs";
+                case "Horse": return "Horses";
+                case "HorseHarness": return "Harnesses";
+                default: return itemTypeName;
+            }
         }
 
         private static IEnumerable<EquipmentIndex> GetSlotsForCategory(GearPresetCategory category)
@@ -599,17 +900,77 @@ namespace CompanionGearUpgrades.UI
         }
     }
 
+    public sealed class GearItemFilterOptionViewModel : ViewModel
+    {
+        private readonly Action<GearItemFilterOptionViewModel> _onSelected;
+        private bool _isSelected;
+
+        public GearItemFilterOptionViewModel(string itemTypeName, string name, Action<GearItemFilterOptionViewModel> onSelected)
+        {
+            ItemTypeName = itemTypeName;
+            Name = name;
+            _onSelected = onSelected;
+        }
+
+        public string ItemTypeName { get; private set; }
+
+        [DataSourceProperty]
+        public string Name { get; private set; }
+
+        [DataSourceProperty]
+        public bool IsSelected
+        {
+            get { return _isSelected; }
+            private set
+            {
+                if (_isSelected == value)
+                    return;
+
+                _isSelected = value;
+                OnPropertyChanged(nameof(IsSelected));
+            }
+        }
+
+        public void ExecuteSelect()
+        {
+            _onSelected?.Invoke(this);
+        }
+
+        public void SetSelected(bool selected)
+        {
+            IsSelected = selected;
+        }
+    }
+
     public sealed class GearItemOptionViewModel : ViewModel
     {
         private readonly Action<GearItemOptionViewModel> _onSelected;
+        private readonly Action<GearItemOptionViewModel> _onHoverBegin;
+        private readonly Action<GearItemOptionViewModel> _onHoverEnd;
         private bool _isSelected;
 
-        public GearItemOptionViewModel(ItemObject item, Action<GearItemOptionViewModel> onSelected)
+        public GearItemOptionViewModel(
+            ItemObject item,
+            Action<GearItemOptionViewModel> onSelected,
+            Action<GearItemOptionViewModel> onHoverBegin,
+            Action<GearItemOptionViewModel> onHoverEnd)
         {
+            Item = item;
             ItemId = item.StringId;
             ItemName = item.Name.ToString();
+            ItemTypeName = item.ItemType.ToString();
             _onSelected = onSelected;
+            _onHoverBegin = onHoverBegin;
+            _onHoverEnd = onHoverEnd;
+            ImageIdentifier = new ItemImageIdentifierVM(item, string.Empty);
         }
+
+        public ItemObject Item { get; private set; }
+
+        public string ItemTypeName { get; private set; }
+
+        [DataSourceProperty]
+        public ItemImageIdentifierVM ImageIdentifier { get; private set; }
 
         [DataSourceProperty]
         public string ItemId { get; private set; }
@@ -639,9 +1000,219 @@ namespace CompanionGearUpgrades.UI
             _onSelected?.Invoke(this);
         }
 
+        public void ExecuteHoverBegin()
+        {
+            _onHoverBegin?.Invoke(this);
+        }
+
+        public void ExecuteHoverEnd()
+        {
+            _onHoverEnd?.Invoke(this);
+        }
+
         public void SetSelected(bool selected)
         {
             IsSelected = selected;
         }
+    }
+
+    /// <summary>
+    /// Lightweight data backing the custom tooltip. It deliberately reuses
+    /// ItemMenuTooltipPropertyVM so its rows follow native inventory tooltip
+    /// conventions without creating an InventoryLogic or SPInventoryVM.
+    /// </summary>
+    public sealed class GearItemTooltipViewModel : ViewModel
+    {
+        private readonly MBBindingList<ItemMenuTooltipPropertyVM> _properties;
+        private ItemImageIdentifierVM _imageIdentifier;
+        private string _itemName;
+        private string _itemStringId;
+        private bool _hasItem;
+
+        public GearItemTooltipViewModel()
+        {
+            _properties = new MBBindingList<ItemMenuTooltipPropertyVM>();
+        }
+
+        [DataSourceProperty]
+        public MBBindingList<ItemMenuTooltipPropertyVM> Properties => _properties;
+
+        [DataSourceProperty]
+        public ItemImageIdentifierVM ImageIdentifier
+        {
+            get { return _imageIdentifier; }
+            private set
+            {
+                if (ReferenceEquals(_imageIdentifier, value))
+                    return;
+
+                _imageIdentifier = value;
+                OnPropertyChanged(nameof(ImageIdentifier));
+            }
+        }
+
+        [DataSourceProperty]
+        public string ItemName
+        {
+            get { return _itemName; }
+            private set
+            {
+                if (string.Equals(_itemName, value, StringComparison.Ordinal))
+                    return;
+
+                _itemName = value;
+                OnPropertyChanged(nameof(ItemName));
+            }
+        }
+
+        [DataSourceProperty]
+        public string ItemStringId
+        {
+            get { return _itemStringId; }
+            private set
+            {
+                if (string.Equals(_itemStringId, value, StringComparison.Ordinal))
+                    return;
+
+                _itemStringId = value;
+                OnPropertyChanged(nameof(ItemStringId));
+            }
+        }
+
+        [DataSourceProperty]
+        public bool HasItem
+        {
+            get { return _hasItem; }
+            private set
+            {
+                if (_hasItem == value)
+                    return;
+
+                _hasItem = value;
+                OnPropertyChanged(nameof(HasItem));
+            }
+        }
+
+        public void SetItem(ItemObject item)
+        {
+            _properties.Clear();
+            HasItem = item != null;
+            ItemName = item != null ? item.Name.ToString() : string.Empty;
+            ItemStringId = item != null ? item.StringId : string.Empty;
+            ImageIdentifier = item != null ? new ItemImageIdentifierVM(item, string.Empty) : null;
+
+            if (item == null)
+                return;
+
+            foreach (GearItemStatValue stat in GetStats(item))
+            {
+                _properties.Add(new ItemMenuTooltipPropertyVM(
+                    stat.Label,
+                    stat.Value,
+                    25,
+                    false,
+                    null,
+                    string.Empty,
+                    false));
+            }
+        }
+
+        public static IEnumerable<GearItemStatValue> GetStats(ItemObject item)
+        {
+            List<GearItemStatValue> stats = new List<GearItemStatValue>();
+            if (item == null)
+                return stats;
+
+            stats.Add(new GearItemStatValue("Type", item.ItemType.ToString()));
+            stats.Add(new GearItemStatValue("Tier", item.Tier.ToString(), Convert.ToInt32(item.Tier)));
+            stats.Add(new GearItemStatValue("Value", item.Value.ToString(), item.Value));
+            stats.Add(new GearItemStatValue("Weight", item.Weight.ToString("0.##"), item.Weight));
+
+            if (item.ArmorComponent != null)
+            {
+                AddPositiveStat(stats, "Head armor", item.ArmorComponent.HeadArmor);
+                AddPositiveStat(stats, "Body armor", item.ArmorComponent.BodyArmor);
+                AddPositiveStat(stats, "Arm armor", item.ArmorComponent.ArmArmor);
+                AddPositiveStat(stats, "Leg armor", item.ArmorComponent.LegArmor);
+                AddPositiveStat(stats, "Speed bonus", item.ArmorComponent.SpeedBonus);
+                AddPositiveStat(stats, "Maneuver bonus", item.ArmorComponent.ManeuverBonus);
+                AddPositiveStat(stats, "Charge bonus", item.ArmorComponent.ChargeBonus);
+            }
+
+            if (item.HorseComponent != null)
+            {
+                AddPositiveStat(stats, "Hit points", item.HorseComponent.HitPoints);
+                AddPositiveStat(stats, "Speed", item.HorseComponent.Speed);
+                AddPositiveStat(stats, "Maneuver", item.HorseComponent.Maneuver);
+                AddPositiveStat(stats, "Charge damage", item.HorseComponent.ChargeDamage);
+            }
+
+            if (item.PrimaryWeapon != null)
+            {
+                AddPositiveStat(stats, "Swing damage", item.PrimaryWeapon.SwingDamage);
+                AddPositiveStat(stats, "Swing speed", item.PrimaryWeapon.SwingSpeed);
+                AddPositiveStat(stats, "Thrust damage", item.PrimaryWeapon.ThrustDamage);
+                AddPositiveStat(stats, "Thrust speed", item.PrimaryWeapon.ThrustSpeed);
+                AddPositiveStat(stats, "Missile damage", item.PrimaryWeapon.MissileDamage);
+                AddPositiveStat(stats, "Missile speed", item.PrimaryWeapon.MissileSpeed);
+                AddPositiveStat(stats, "Accuracy", item.PrimaryWeapon.Accuracy);
+                AddPositiveStat(stats, "Handling", item.PrimaryWeapon.Handling);
+                AddPositiveStat(stats, "Weapon length", item.PrimaryWeapon.WeaponLength);
+                AddPositiveStat(stats, "Ammo", item.PrimaryWeapon.MaxDataValue);
+            }
+
+            return stats;
+        }
+
+        private static void AddPositiveStat(List<GearItemStatValue> stats, string label, int value)
+        {
+            if (value > 0)
+                stats.Add(new GearItemStatValue(label, value.ToString(), value));
+        }
+    }
+
+    public sealed class GearItemComparisonViewModel : ViewModel
+    {
+        public GearItemComparisonViewModel(GearItemStatValue inspected, GearItemStatValue configured)
+        {
+            Label = inspected != null ? inspected.Label : configured.Label;
+            InspectedValue = inspected != null ? inspected.Value : "-";
+            ConfiguredValue = configured != null ? configured.Value : "-";
+
+            if (inspected != null && configured != null && inspected.NumericValue.HasValue && configured.NumericValue.HasValue)
+            {
+                IsBetter = inspected.NumericValue.Value > configured.NumericValue.Value;
+                IsWorse = inspected.NumericValue.Value < configured.NumericValue.Value;
+            }
+        }
+
+        [DataSourceProperty]
+        public string Label { get; private set; }
+
+        [DataSourceProperty]
+        public string InspectedValue { get; private set; }
+
+        [DataSourceProperty]
+        public string ConfiguredValue { get; private set; }
+
+        [DataSourceProperty]
+        public bool IsBetter { get; private set; }
+
+        [DataSourceProperty]
+        public bool IsWorse { get; private set; }
+    }
+
+    public sealed class GearItemStatValue
+    {
+        public GearItemStatValue(string label, string value, float? numericValue = null)
+        {
+            Label = label;
+            Value = value;
+            NumericValue = numericValue;
+        }
+
+        public string Label { get; private set; }
+        public string Value { get; private set; }
+        public float? NumericValue { get; private set; }
     }
 }
