@@ -54,7 +54,7 @@ namespace CompanionGearUpgrades.UI
         private readonly MBBindingList<GearItemFilterOptionViewModel> _filters;
         private readonly MBBindingList<GearItemSortOptionViewModel> _sortOptions;
         private readonly MBBindingList<GearItemComparisonViewModel> _comparisonStats;
-        private readonly ItemPreviewVM _itemPreview;
+        private ItemPreviewVM _itemPreview;
         private readonly GearItemTooltipViewModel _inspectionTooltip;
         private readonly GearItemTooltipViewModel _configuredTooltip;
 
@@ -67,7 +67,13 @@ namespace CompanionGearUpgrades.UI
         private string _selectedItemTypeFilter;
         private string _itemSearchText;
         private GearItemSortOrder _itemSortOrder;
-        private string _previewItemId;
+        private string _requestedPreviewItemId;
+        private string _openedPreviewItemId;
+        private int _previewOpenDelayTicks;
+        private int _previewVerificationTicks;
+        private int _previewOpenAttempt;
+        private string _previewStateText;
+        private bool _isReleasingPreview;
         private GearItemOptionViewModel _hoveredCandidate;
         private Page _page;
         private bool _isWindowOpen;
@@ -92,10 +98,10 @@ namespace CompanionGearUpgrades.UI
             _filters = new MBBindingList<GearItemFilterOptionViewModel>();
             _sortOptions = new MBBindingList<GearItemSortOptionViewModel>();
             _comparisonStats = new MBBindingList<GearItemComparisonViewModel>();
-            _itemPreview = new ItemPreviewVM(OnItemPreviewClosed);
             _inspectionTooltip = new GearItemTooltipViewModel();
             _configuredTooltip = new GearItemTooltipViewModel();
             _itemSortOrder = GearItemSortOrder.ValueAscending;
+            _previewStateText = "Preview will load when an item is selected.";
             _statusText = "Select a role and tier to edit a preset.";
             _page = Page.Roles;
 
@@ -141,7 +147,10 @@ namespace CompanionGearUpgrades.UI
         public MBBindingList<GearItemComparisonViewModel> ComparisonStats => _comparisonStats;
 
         [DataSourceProperty]
-        public bool HasPreviewItem => !string.IsNullOrEmpty(_previewItemId);
+        public bool HasPreviewItem => !string.IsNullOrEmpty(_openedPreviewItemId);
+
+        [DataSourceProperty]
+        public string PreviewStateText => _previewStateText;
 
         [DataSourceProperty]
         public bool HasInspectionItem => _inspectionTooltip.HasItem;
@@ -318,6 +327,7 @@ namespace CompanionGearUpgrades.UI
 
         public void ExecuteOpenConfiguration()
         {
+            CreatePreviewSession();
             _working = null;
             _selectedCandidateId = null;
             ClearItemInspection();
@@ -369,6 +379,7 @@ namespace CompanionGearUpgrades.UI
             _working = null;
             ClearItemInspection();
             IsWindowOpen = false;
+            ReleasePreviewSession();
         }
 
         public void ExecuteCancel()
@@ -460,8 +471,8 @@ namespace CompanionGearUpgrades.UI
             RebuildVisibleItems();
             NotifyCurrentItemChanged();
             NotifyCandidateChanged();
-            RefreshItemInspection();
             SetPage(Page.Items);
+            RefreshItemInspection();
         }
 
         private void HighlightCandidate(GearItemOptionViewModel option)
@@ -572,6 +583,9 @@ namespace CompanionGearUpgrades.UI
                 ClearItemInspection();
 
             _page = page;
+            if (page == Page.Items)
+                ArmPreviewHostInitialization();
+
             NotifyPageChanged();
         }
 
@@ -652,6 +666,7 @@ namespace CompanionGearUpgrades.UI
             _selectedCandidateId = null;
             ClearItemInspection();
             IsWindowOpen = false;
+            ReleasePreviewSession();
         }
 
         /// <summary>
@@ -725,18 +740,185 @@ namespace CompanionGearUpgrades.UI
             }
         }
 
+        /// <summary>
+        /// Called by the owning Gauntlet layer after the movie has had a frame
+        /// to materialize the InventoryItemPreviewWidget. ItemPreviewVM.Open
+        /// must never run from the selection command itself: at that time the
+        /// Items page can still be absent from the visual tree.
+        /// </summary>
+        public void OnGauntletTick()
+        {
+            if (!IsWindowOpen || _page != Page.Items || _itemPreview == null ||
+                string.IsNullOrEmpty(_requestedPreviewItemId))
+                return;
+
+            if (_previewOpenDelayTicks > 0)
+            {
+                _previewOpenDelayTicks--;
+                return;
+            }
+
+            if (_previewVerificationTicks > 0)
+            {
+                _previewVerificationTicks--;
+                if (_previewVerificationTicks == 0)
+                    VerifyPreviewInitialization();
+                return;
+            }
+
+            if (string.IsNullOrEmpty(_openedPreviewItemId) && _previewOpenAttempt < 2)
+                OpenRequestedPreview();
+        }
+
         private void SetPreviewItem(ItemObject item)
         {
             string itemId = item != null ? item.StringId : null;
-            if (string.Equals(_previewItemId, itemId, StringComparison.Ordinal))
+            if (string.Equals(_requestedPreviewItemId, itemId, StringComparison.Ordinal) &&
+                (!string.IsNullOrEmpty(_openedPreviewItemId) || _previewOpenDelayTicks > 0 || _previewVerificationTicks > 0))
                 return;
 
-            _previewItemId = itemId;
-            if (item == null)
-                _itemPreview.Close();
-            else
-                _itemPreview.Open(new EquipmentElement(item));
+            _requestedPreviewItemId = itemId;
+            _openedPreviewItemId = null;
+            _previewOpenAttempt = 0;
+            _previewVerificationTicks = 0;
 
+            if (item == null)
+            {
+                _previewOpenDelayTicks = 0;
+                if (_itemPreview != null)
+                    _itemPreview.Close();
+
+                SetPreviewState("Hover or select an item to preview it.");
+                NotifyPreviewChanged();
+                return;
+            }
+
+            _previewOpenDelayTicks = 2;
+            SetPreviewState("Loading 3D preview...");
+            NotifyPreviewChanged();
+        }
+
+        private void ArmPreviewHostInitialization()
+        {
+            if (_itemPreview == null || string.IsNullOrEmpty(_requestedPreviewItemId))
+                return;
+
+            _openedPreviewItemId = null;
+            _previewOpenAttempt = 0;
+            _previewVerificationTicks = 0;
+            _previewOpenDelayTicks = 2;
+            SetPreviewState("Loading 3D preview...");
+            NotifyPreviewChanged();
+        }
+
+        private void OpenRequestedPreview()
+        {
+            ItemObject item = FindItem(_requestedPreviewItemId);
+            if (item == null)
+            {
+                SetPreviewState("The selected item is no longer available for preview.");
+                NotifyPreviewChanged();
+                return;
+            }
+
+            try
+            {
+                _previewOpenAttempt++;
+                _itemPreview.Open(new EquipmentElement(item));
+                _previewVerificationTicks = 1;
+                SetPreviewState("Loading 3D preview...");
+            }
+            catch (Exception)
+            {
+                SchedulePreviewRetryOrReportFailure();
+            }
+        }
+
+        private void VerifyPreviewInitialization()
+        {
+            bool tableauMatchesItem = _itemPreview != null &&
+                _itemPreview.ItemTableau != null &&
+                string.Equals(_itemPreview.ItemTableau.StringId, _requestedPreviewItemId, StringComparison.Ordinal);
+
+            if (tableauMatchesItem)
+            {
+                _openedPreviewItemId = _requestedPreviewItemId;
+                SetPreviewState("3D preview ready.");
+                NotifyPreviewChanged();
+                return;
+            }
+
+            SchedulePreviewRetryOrReportFailure();
+        }
+
+        private void SchedulePreviewRetryOrReportFailure()
+        {
+            if (_previewOpenAttempt < 2)
+            {
+                _previewVerificationTicks = 0;
+                _previewOpenDelayTicks = 1;
+                SetPreviewState("Retrying 3D preview...");
+                return;
+            }
+
+            _openedPreviewItemId = null;
+            SetPreviewState("3D preview is temporarily unavailable. Hover the item again to retry.");
+            NotifyPreviewChanged();
+        }
+
+        private void CreatePreviewSession()
+        {
+            ReleasePreviewSession();
+            _itemPreview = new ItemPreviewVM(OnItemPreviewClosed);
+            _requestedPreviewItemId = null;
+            _openedPreviewItemId = null;
+            _previewOpenDelayTicks = 0;
+            _previewVerificationTicks = 0;
+            _previewOpenAttempt = 0;
+            SetPreviewState("Preview will load when an item is selected.");
+            OnPropertyChanged(nameof(ItemPreview));
+            NotifyPreviewChanged();
+        }
+
+        private void ReleasePreviewSession()
+        {
+            _requestedPreviewItemId = null;
+            _openedPreviewItemId = null;
+            _previewOpenDelayTicks = 0;
+            _previewVerificationTicks = 0;
+            _previewOpenAttempt = 0;
+
+            if (_itemPreview != null)
+            {
+                _isReleasingPreview = true;
+                try
+                {
+                    _itemPreview.Close();
+                    _itemPreview.OnFinalize();
+                }
+                finally
+                {
+                    _isReleasingPreview = false;
+                    _itemPreview = null;
+                }
+            }
+
+            SetPreviewState("Preview is closed.");
+            OnPropertyChanged(nameof(ItemPreview));
+            NotifyPreviewChanged();
+        }
+
+        private void SetPreviewState(string state)
+        {
+            if (string.Equals(_previewStateText, state, StringComparison.Ordinal))
+                return;
+
+            _previewStateText = state;
+            OnPropertyChanged(nameof(PreviewStateText));
+        }
+
+        private void NotifyPreviewChanged()
+        {
             OnPropertyChanged(nameof(HasPreviewItem));
         }
 
@@ -754,17 +936,23 @@ namespace CompanionGearUpgrades.UI
 
         private void OnItemPreviewClosed()
         {
-            if (string.IsNullOrEmpty(_previewItemId))
+            _openedPreviewItemId = null;
+            NotifyPreviewChanged();
+
+            if (_isReleasingPreview || !IsWindowOpen || _page != Page.Items ||
+                string.IsNullOrEmpty(_requestedPreviewItemId))
                 return;
 
-            _previewItemId = null;
-            OnPropertyChanged(nameof(HasPreviewItem));
+            _previewOpenAttempt = 0;
+            _previewVerificationTicks = 0;
+            _previewOpenDelayTicks = 1;
+            SetPreviewState("Reinitializing 3D preview...");
         }
 
         public override void OnFinalize()
         {
             ClearItemInspection();
-            _itemPreview.OnFinalize();
+            ReleasePreviewSession();
             base.OnFinalize();
         }
 

@@ -40,7 +40,7 @@ namespace CompanionGearUpgrades.UI
             _layer = new GauntletLayer(LayerName, 1000, false);
             _viewModel = new GearPresetConfigViewModel(_service, _overrides, SetWindowLayerState);
             _movie = _layer.LoadMovie("EquipmentConfigWindow", _viewModel);
-            _globalLayer = new EquipmentGlobalLayer(_layer);
+            _globalLayer = new EquipmentGlobalLayer(_layer, OnGauntletTick);
 
             ScreenManager.OnPushScreen += OnPushScreen;
             ScreenManager.OnPopScreen += OnPopScreen;
@@ -112,11 +112,25 @@ namespace CompanionGearUpgrades.UI
             _layer.InputRestrictions.SetInputRestrictions(isOpen, InputUsageMask.All);
         }
 
+        private void OnGauntletTick()
+        {
+            _viewModel?.OnGauntletTick();
+        }
+
         private sealed class EquipmentGlobalLayer : GlobalLayer
         {
-            public EquipmentGlobalLayer(ScreenLayer layer)
+            private readonly Action _onTick;
+
+            public EquipmentGlobalLayer(ScreenLayer layer, Action onTick)
             {
                 Layer = layer;
+                _onTick = onTick;
+            }
+
+            protected override void OnTick(float dt)
+            {
+                base.OnTick(dt);
+                _onTick?.Invoke();
             }
         }
     }
