@@ -238,11 +238,10 @@
     <Compile Include="UI\GearPresetConfigViewModel.cs" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="GUI\Prefabs\EquipmentConfigWindow.xml" />
-    <Content Include="SubModule.xml">
+    <Content Include="GUI\Prefabs\EquipmentConfigWindow.xml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="GUI\EquipmentConfigWindow.xml">
+    <Content Include="SubModule.xml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="GUI\PrefabExtensions\ClanEquipmentTab.xml">
@@ -251,10 +250,9 @@
   </ItemGroup>
   <ItemGroup />
   <Target Name="CopyGauntletLayoutToModule" AfterTargets="Build">
-    <MakeDir Directories="$(OutputPath)..\..;$(OutputPath)..\..\GUI;$(OutputPath)..\..\GUI\PrefabExtensions;$(OutputPath)..\..\GUI\Prefabs" />
+    <MakeDir Directories="$(OutputPath)..\..;$(OutputPath)..\..\GUI\PrefabExtensions;$(OutputPath)..\..\GUI\Prefabs" />
     <Copy SourceFiles="$(ProjectDir)SubModule.xml" DestinationFiles="$(OutputPath)..\..\SubModule.xml" SkipUnchangedFiles="true" />
-    <Copy SourceFiles="$(ProjectDir)GUI\EquipmentConfigWindow.xml;$(ProjectDir)GUI\PrefabExtensions\ClanEquipmentTab.xml" DestinationFiles="$(OutputPath)..\..\GUI\EquipmentConfigWindow.xml;$(OutputPath)..\..\GUI\PrefabExtensions\ClanEquipmentTab.xml" SkipUnchangedFiles="true" />
-    <Copy SourceFiles="$(ProjectDir)GUI\EquipmentConfigWindow.xml" DestinationFiles="$(OutputPath)..\..\GUI\Prefabs\EquipmentConfigWindow.xml" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(ProjectDir)GUI\Prefabs\EquipmentConfigWindow.xml;$(ProjectDir)GUI\PrefabExtensions\ClanEquipmentTab.xml" DestinationFiles="$(OutputPath)..\..\GUI\Prefabs\EquipmentConfigWindow.xml;$(OutputPath)..\..\GUI\PrefabExtensions\ClanEquipmentTab.xml" SkipUnchangedFiles="true" />
   </Target>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

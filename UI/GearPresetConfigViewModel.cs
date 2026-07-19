@@ -484,6 +484,85 @@ namespace CompanionGearUpgrades.UI
             ));
         }
 
+        public void ExecuteCalculateTierPriceFromEquipment()
+        {
+            if (_working == null)
+                return;
+
+            int calculatedPrice;
+            string error;
+            if (!TryCalculateTierPriceFromEquipment(_working, out calculatedPrice, out error))
+            {
+                StatusText = error;
+                return;
+            }
+
+            InformationManager.ShowInquiry(new InquiryData(
+                "CGU - Calculate price",
+                $"Configured equipment is worth {calculatedPrice} gold. Use this as the tier price?",
+                true,
+                true,
+                "Apply",
+                "Cancel",
+                () => ApplyCalculatedTierPrice(calculatedPrice),
+                () => StatusText = "Calculated price was not applied."
+            ));
+        }
+
+        private void ApplyCalculatedTierPrice(int calculatedPrice)
+        {
+            GearPresetSnapshot updatedSnapshot;
+            if (!GearPresetConfigUi.TrySetSnapshotPrice(_working, calculatedPrice.ToString(), out updatedSnapshot))
+            {
+                StatusText = "Calculated price is invalid.";
+                return;
+            }
+
+            _working = updatedSnapshot;
+            OnPropertyChanged(nameof(CurrentTierCostText));
+            StatusText = $"Temporary tier price calculated from equipment: {_working.Cost} gold.";
+        }
+
+        private static bool TryCalculateTierPriceFromEquipment(
+            GearPresetSnapshot snapshot,
+            out int calculatedPrice,
+            out string error)
+        {
+            calculatedPrice = 0;
+            error = null;
+
+            if (snapshot == null || snapshot.Slots == null)
+            {
+                error = "The current tier is not available.";
+                return false;
+            }
+
+            long total = 0;
+            foreach (EquipmentIndex slot in GearPresetOverrides.EditableSlots)
+            {
+                string itemId;
+                if (!snapshot.Slots.TryGetValue(slot, out itemId) || string.IsNullOrEmpty(itemId))
+                    continue;
+
+                ItemObject item = MBObjectManager.Instance.GetObject<ItemObject>(itemId);
+                if (item == null)
+                {
+                    error = $"Cannot calculate price: configured item '{itemId}' is unavailable.";
+                    return false;
+                }
+
+                total += item.Value;
+                if (total > int.MaxValue)
+                {
+                    error = "Calculated equipment value is too high.";
+                    return false;
+                }
+            }
+
+            calculatedPrice = (int)total;
+            return true;
+        }
+
         private void SelectRole(GearRoleOptionViewModel option)
         {
             _role = option.Role;
