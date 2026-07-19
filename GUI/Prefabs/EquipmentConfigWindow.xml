@@ -31,7 +31,7 @@
 															<Children>
 																<Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="5" VerticalAlignment="Bottom" Sprite="BlankWhiteSquare_9" Color="#E0BC62FF" IsVisible="@IsSelected" DoNotAcceptEvents="true" />
 																<TextWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="82" SuggestedHeight="18" HorizontalAlignment="Right" VerticalAlignment="Top" MarginTop="7" MarginRight="10" Text="SELECTED" IsVisible="@IsSelected" Brush="InventoryItemCostFont" Brush.FontSize="11" Brush.TextHorizontalAlignment="Center" DoNotAcceptEvents="true" />
-																<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="28" Text="ROLE PRESET" HorizontalAlignment="Center" VerticalAlignment="Center" Brush="InventoryDefaultFontBrush" Brush.FontSize="14" Brush.TextHorizontalAlignment="Center" AlphaFactor="0.72" DoNotAcceptEvents="true" />
+																<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="28" MarginBottom="8" Text="ROLE PRESET" HorizontalAlignment="Center" VerticalAlignment="Center" Brush="InventoryDefaultFontBrush" Brush.FontSize="14" Brush.TextHorizontalAlignment="Center" AlphaFactor="0.72" DoNotAcceptEvents="true" />
 																<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="52" MarginTop="48" MarginLeft="24" MarginRight="48" Text="@Name" HorizontalAlignment="Center" VerticalAlignment="Center" Brush="InventoryHeaderFontBrush" Brush.FontSize="26" Brush.TextHorizontalAlignment="Center" ClipContents="true" DoNotAcceptEvents="true" />
 																<Widget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="22" SuggestedHeight="22" HorizontalAlignment="Right" VerticalAlignment="Center" MarginRight="22" Sprite="StdAssets\arrow_little" DoNotAcceptEvents="true" />
 															</Children>
@@ -59,7 +59,7 @@
 															<Children>
 																<Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="5" VerticalAlignment="Bottom" Sprite="BlankWhiteSquare_9" Color="#E0BC62FF" IsVisible="@IsSelected" DoNotAcceptEvents="true" />
 																<TextWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="82" SuggestedHeight="18" HorizontalAlignment="Right" VerticalAlignment="Top" MarginTop="7" MarginRight="10" Text="SELECTED" IsVisible="@IsSelected" Brush="InventoryItemCostFont" Brush.FontSize="11" Brush.TextHorizontalAlignment="Center" DoNotAcceptEvents="true" />
-																<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="24" Text="UPGRADE LEVEL" HorizontalAlignment="Center" VerticalAlignment="Center" Brush="InventoryDefaultFontBrush" Brush.FontSize="13" Brush.TextHorizontalAlignment="Center" AlphaFactor="0.72" DoNotAcceptEvents="true" />
+																<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="24" MarginBottom="8" Text="UPGRADE LEVEL" HorizontalAlignment="Center" VerticalAlignment="Center" Brush="InventoryDefaultFontBrush" Brush.FontSize="13" Brush.TextHorizontalAlignment="Center" AlphaFactor="0.72" DoNotAcceptEvents="true" />
 																<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="42" MarginTop="38" Text="@TierName" HorizontalAlignment="Center" VerticalAlignment="Center" Brush="InventoryHeaderFontBrush" Brush.FontSize="27" Brush.TextHorizontalAlignment="Center" DoNotAcceptEvents="true" />
 																<BrushWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="178" SuggestedHeight="38" HorizontalAlignment="Center" VerticalAlignment="Bottom" MarginBottom="14" Brush="Inventory.Tooltip.WeaponAlternativeUsageButton" DoNotAcceptEvents="true">
 																	<Children>
@@ -137,7 +137,7 @@
 																		<Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="5" VerticalAlignment="Bottom" Sprite="BlankWhiteSquare_9" Color="#E0BC62FF" IsVisible="@IsSelected" DoNotAcceptEvents="true" />
 																		<TextWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="82" SuggestedHeight="18" HorizontalAlignment="Right" VerticalAlignment="Top" MarginTop="6" MarginRight="10" Text="SELECTED" IsVisible="@IsSelected" Brush="InventoryItemCostFont" Brush.FontSize="11" Brush.TextHorizontalAlignment="Center" DoNotAcceptEvents="true" />
 																		<BrushWidget DoNotAcceptEvents="true" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="56" SuggestedHeight="56" MarginLeft="18" HorizontalAlignment="Left" VerticalAlignment="Center" Brush="@IconBrush" />
-																		<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="24" MarginLeft="88" MarginRight="44" MarginTop="18" Text="OPEN CATEGORY" VerticalAlignment="Center" Brush="InventoryDefaultFontBrush" Brush.FontSize="13" AlphaFactor="0.72" DoNotAcceptEvents="true" />
+																		<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="24" MarginLeft="88" MarginRight="44" MarginTop="8" MarginBottom="4" Text="OPEN CATEGORY" VerticalAlignment="Center" Brush="InventoryDefaultFontBrush" Brush.FontSize="13" AlphaFactor="0.72" DoNotAcceptEvents="true" />
 																		<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="42" MarginLeft="88" MarginRight="44" MarginTop="44" Text="@Name" VerticalAlignment="Center" Brush="InventoryHeaderFontBrush" Brush.FontSize="21" ClipContents="true" DoNotAcceptEvents="true" />
 																		<Widget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="20" SuggestedHeight="20" HorizontalAlignment="Right" VerticalAlignment="Center" MarginRight="18" Sprite="StdAssets\arrow_little" DoNotAcceptEvents="true" />
 																	</Children>
@@ -322,7 +322,7 @@
 
 										<BrushWidget WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent" SuggestedWidth="420" MarginRight="12" Brush="Inventory.Tooltip.Background">
 													<Children>
-														<ListPanel WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" MarginLeft="20" MarginRight="20" MarginTop="20" MarginBottom="76" StackLayout.LayoutMethod="VerticalTopToBottom">
+														<ListPanel WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" MarginLeft="20" MarginRight="20" MarginTop="20" MarginBottom="98" StackLayout.LayoutMethod="VerticalTopToBottom">
 															<Children>
 																<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="30" Text="3D preview" HorizontalAlignment="Center" Brush="InventoryHeaderFontBrush" Brush.FontSize="20" Brush.TextHorizontalAlignment="Center" />
 																<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="30" MarginTop="4" Text="@CurrentItemDisplayName" HorizontalAlignment="Center" VerticalAlignment="Center" Brush="InventoryDefaultFontBrush" Brush.FontSize="18" Brush.TextHorizontalAlignment="Center" ClipContents="true">
@@ -331,13 +331,9 @@
 																	</Children>
 																</TextWidget>
 																<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="22" Text="@CurrentItemStringIdLabel" HorizontalAlignment="Center" Brush="InventoryDefaultFontBrush" Brush.FontSize="14" Brush.TextHorizontalAlignment="Center" ClipContents="true" />
-																<BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="350" MarginTop="10" Brush="Frame1Brush">
+																<BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="342" MarginTop="10" Brush="Frame1Brush">
 																	<Children>
-																		<InventoryItemPreviewWidget DataSource="{ItemPreview}" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" ItemTableau="PreviewTableau" IsPreviewOpen="@IsSelected">
-																			<Children>
-																				<ItemTableauWidget Id="PreviewTableau" DataSource="{ItemTableau}" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="320" SuggestedHeight="320" HorizontalAlignment="Center" VerticalAlignment="Center" ItemModifierId="@ItemModifierId" StringId="@StringId" BannerCode="@BannerCode" InitialTiltRotation="-1.64" />
-																			</Children>
-																		</InventoryItemPreviewWidget>
+																		<ItemTableauWidget Id="CGUPreviewTableau" DataSource="{PreviewTableau}" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="320" SuggestedHeight="320" HorizontalAlignment="Center" VerticalAlignment="Center" ItemModifierId="@ItemModifierId" StringId="@StringId" BannerCode="@BannerCode" InitialTiltRotation="-1.64" />
 																		<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" IsHidden="@HasPreviewItem" Text="@PreviewStateText" HorizontalAlignment="Center" VerticalAlignment="Center" Brush="InventoryDefaultFontBrush" Brush.FontSize="16" Brush.TextHorizontalAlignment="Center" />
 																	</Children>
 																</BrushWidget>
@@ -349,7 +345,7 @@
 																<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="20" Text="@SelectedCandidateStringId" HorizontalAlignment="Center" Brush="InventoryDefaultFontBrush" Brush.FontSize="14" Brush.TextHorizontalAlignment="Center" ClipContents="true" />
 															</Children>
 														</ListPanel>
-														<ListPanel WidthSizePolicy="CoverChildren" HeightSizePolicy="Fixed" SuggestedHeight="46" HorizontalAlignment="Center" VerticalAlignment="Bottom" MarginBottom="16" StackLayout.LayoutMethod="HorizontalLeftToRight">
+														<ListPanel WidthSizePolicy="CoverChildren" HeightSizePolicy="Fixed" SuggestedHeight="46" HorizontalAlignment="Center" VerticalAlignment="Bottom" MarginBottom="38" StackLayout.LayoutMethod="HorizontalLeftToRight">
 															<Children>
 																<ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="150" SuggestedHeight="42" Brush="Popup.Done.Button.NineGrid" Command.Click="ExecuteSelectItem" DoNotPassEventsToChildren="true" UpdateChildrenStates="true">
 																	<Children>
@@ -365,6 +361,7 @@
 																</ButtonWidget>
 															</Children>
 														</ListPanel>
+														<TextWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="400" SuggestedHeight="24" HorizontalAlignment="Center" VerticalAlignment="Bottom" MarginBottom="7" Text="@StatusText" Brush="InventoryDefaultFontBrush" Brush.FontSize="14" Brush.TextHorizontalAlignment="Center" ClipContents="true" />
 													</Children>
 												</BrushWidget>
 
@@ -430,7 +427,7 @@
 									</Children>
 								</Widget>
 
-								<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="26" VerticalAlignment="Bottom" MarginBottom="2" Text="@StatusText" HorizontalAlignment="Center" Brush="InventoryDefaultFontBrush" Brush.FontSize="16" Brush.TextHorizontalAlignment="Center" ClipContents="true" />
+								<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="26" VerticalAlignment="Bottom" MarginBottom="2" Text="@StatusText" HorizontalAlignment="Center" Brush="InventoryDefaultFontBrush" Brush.FontSize="16" Brush.TextHorizontalAlignment="Center" ClipContents="true" IsHidden="@IsItemSelectionVisible" />
 							</Children>
 						</Widget>
 
@@ -449,10 +446,10 @@
 												<HintWidget DataSource="{SaveHint}" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Command.HoverBegin="ExecuteBeginHint" Command.HoverEnd="ExecuteEndHint" IsDisabled="true" />
 											</Children>
 										</ButtonWidget>
-										<ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="180" SuggestedHeight="48" VerticalAlignment="Center" MarginLeft="10" Brush="Popup.Cancel.Button.NineGrid" Command.Click="ExecuteCancel" DoNotPassEventsToChildren="true" UpdateChildrenStates="true" IsVisible="@IsTierEditorMainVisible">
+										<ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="180" SuggestedHeight="48" VerticalAlignment="Center" MarginLeft="10" Brush="Popup.Cancel.Button.NineGrid" Command.Click="ExecuteExit" DoNotPassEventsToChildren="true" UpdateChildrenStates="true">
 											<Children>
-												<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Text="Cancel" HorizontalAlignment="Center" VerticalAlignment="Center" Brush="Popup.Button.Text" Brush.FontSize="17" Brush.TextHorizontalAlignment="Center" />
-												<HintWidget DataSource="{CancelHint}" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Command.HoverBegin="ExecuteBeginHint" Command.HoverEnd="ExecuteEndHint" IsDisabled="true" />
+												<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Text="Exit" HorizontalAlignment="Center" VerticalAlignment="Center" Brush="Popup.Button.Text" Brush.FontSize="17" Brush.TextHorizontalAlignment="Center" />
+												<HintWidget DataSource="{ExitHint}" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Command.HoverBegin="ExecuteBeginHint" Command.HoverEnd="ExecuteEndHint" IsDisabled="true" />
 											</Children>
 										</ButtonWidget>
 									</Children>

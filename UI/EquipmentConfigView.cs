@@ -1,8 +1,11 @@
 using CompanionGearUpgrades.Data;
 using CompanionGearUpgrades.Services;
+using SandBox.GauntletUI;
 using System;
 using TaleWorlds.Engine.GauntletUI;
+using TaleWorlds.GauntletUI.BaseTypes;
 using TaleWorlds.Library;
+using TaleWorlds.MountAndBlade.GauntletUI.Widgets;
 using TaleWorlds.ScreenSystem;
 
 namespace CompanionGearUpgrades.UI
@@ -24,6 +27,7 @@ namespace CompanionGearUpgrades.UI
         private GauntletMovieIdentifier _movie;
         private GearPresetConfigViewModel _viewModel;
         private bool _isClanScreen;
+        private bool _releaseMovieOnNextTick;
 
         public EquipmentConfigView(CompanionGearUpgradeService service, GearPresetOverrides overrides)
         {
@@ -38,8 +42,6 @@ namespace CompanionGearUpgrades.UI
 
             _current = this;
             _layer = new GauntletLayer(LayerName, 1000, false);
-            _viewModel = new GearPresetConfigViewModel(_service, _overrides, SetWindowLayerState);
-            _movie = _layer.LoadMovie("EquipmentConfigWindow", _viewModel);
             _globalLayer = new EquipmentGlobalLayer(_layer, OnGauntletTick);
 
             ScreenManager.OnPushScreen += OnPushScreen;
@@ -56,11 +58,8 @@ namespace CompanionGearUpgrades.UI
             if (_globalLayer != null)
                 ScreenManager.RemoveGlobalLayer(_globalLayer);
 
-            if (_layer != null && _movie != null)
-                _layer.ReleaseMovie(_movie);
+            ReleaseConfigurationMovie();
 
-            _movie = null;
-            _viewModel = null;
             _layer = null;
             _globalLayer = null;
 
@@ -70,10 +69,40 @@ namespace CompanionGearUpgrades.UI
 
         public static bool OpenConfiguration()
         {
-            if (_current == null || _current._viewModel == null)
+            return _current != null && _current.OpenConfigurationInternal();
+        }
+
+        private bool OpenConfigurationInternal()
+        {
+            _isClanScreen = IsClanScreen(ScreenManager.TopScreen);
+            if (!_isClanScreen || _layer == null)
                 return false;
 
-            _current._viewModel.ExecuteOpenConfiguration();
+            if (_releaseMovieOnNextTick)
+                ReleaseConfigurationMovie();
+
+            if (_viewModel == null)
+            {
+                GearPresetConfigViewModel viewModel =
+                    new GearPresetConfigViewModel(_service, _overrides, SetWindowLayerState);
+                GauntletMovieIdentifier movie = null;
+                try
+                {
+                    movie = _layer.LoadMovie("EquipmentConfigWindow", viewModel);
+                    _viewModel = viewModel;
+                    _movie = movie;
+                    _viewModel.SetClanScreenVisible(true);
+                }
+                catch
+                {
+                    viewModel.OnFinalize();
+                    if (movie != null)
+                        _layer.ReleaseMovie(movie);
+                    return false;
+                }
+            }
+
+            _viewModel.ExecuteOpenConfiguration();
             return true;
         }
 
@@ -89,8 +118,7 @@ namespace CompanionGearUpgrades.UI
 
         private void UpdateScreenVisibility(ScreenBase screen)
         {
-            _isClanScreen = screen != null &&
-                string.Equals(screen.GetType().Name, "GauntletClanScreen", StringComparison.Ordinal);
+            _isClanScreen = IsClanScreen(screen);
 
             if (_viewModel != null)
                 _viewModel.SetClanScreenVisible(_isClanScreen);
@@ -103,18 +131,78 @@ namespace CompanionGearUpgrades.UI
             }
         }
 
+        private static bool IsClanScreen(ScreenBase screen)
+        {
+            if (screen == null)
+                return false;
+
+            // NavalDLC's NavalGauntletClanScreen derives from this native
+            // screen, so the type check covers both vanilla and DLC variants.
+            return screen is GauntletClanScreen;
+        }
+
         private void SetWindowLayerState(bool isOpen)
         {
             if (_layer == null)
                 return;
 
-            _layer.IsFocusLayer = _isClanScreen && isOpen;
-            _layer.InputRestrictions.SetInputRestrictions(isOpen, InputUsageMask.All);
+            bool isModal = _isClanScreen && isOpen;
+            _layer.IsFocusLayer = isModal;
+            _layer.InputRestrictions.SetInputRestrictions(isModal, InputUsageMask.All);
+            _releaseMovieOnNextTick = !isOpen && _movie != null;
         }
 
         private void OnGauntletTick()
         {
-            _viewModel?.OnGauntletTick();
+            if (_releaseMovieOnNextTick)
+            {
+                ReleaseConfigurationMovie();
+                return;
+            }
+
+            ItemTableauWidget previewHost = GetPreviewHost();
+            bool isHostReady = previewHost != null &&
+                previewHost.ConnectedToRoot &&
+                previewHost.IsRecursivelyVisible() &&
+                previewHost.TextureProvider != null;
+            bool isTextureReady = isHostReady &&
+                previewHost.Texture != null &&
+                previewHost.Texture.IsValid;
+
+            _viewModel?.OnGauntletTick(isHostReady, isTextureReady);
+        }
+
+        private ItemTableauWidget GetPreviewHost()
+        {
+            Widget root = _layer?.UIContext?.Root;
+            if (root == null)
+                return null;
+
+            var previewWidgets = root.FindChildrenWithId<ItemTableauWidget>("CGUPreviewTableau", true);
+            if (previewWidgets == null || previewWidgets.Count == 0)
+                return null;
+
+            return previewWidgets[0];
+        }
+
+        private void ReleaseConfigurationMovie()
+        {
+            _releaseMovieOnNextTick = false;
+
+            GearPresetConfigViewModel viewModel = _viewModel;
+            GauntletMovieIdentifier movie = _movie;
+            _viewModel = null;
+            _movie = null;
+
+            try
+            {
+                viewModel?.OnFinalize();
+            }
+            finally
+            {
+                if (_layer != null && movie != null)
+                    _layer.ReleaseMovie(movie);
+            }
         }
 
         private sealed class EquipmentGlobalLayer : GlobalLayer

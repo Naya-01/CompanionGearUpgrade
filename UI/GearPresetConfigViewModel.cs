@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using TaleWorlds.CampaignSystem;
 using TaleWorlds.CampaignSystem.ViewModelCollection.Inventory;
 using TaleWorlds.Core;
+using TaleWorlds.Core.ViewModelCollection;
 using TaleWorlds.Core.ViewModelCollection.Information;
 using TaleWorlds.Core.ViewModelCollection.ImageIdentifiers;
 using TaleWorlds.Library;
@@ -66,15 +67,21 @@ namespace CompanionGearUpgrades.UI
         private GearPresetCategory _category;
         private EquipmentIndex _slot;
         private GearPresetSnapshot _working;
+        private GearPresetSnapshot _savedSnapshot;
+        private GearRole _workingRole;
+        private int _workingTier;
+        private bool _hasWorkingPreset;
         private string _selectedCandidateId;
         private string _selectedItemTypeFilter;
         private string _itemSearchText;
         private GearItemSortOrder _itemSortOrder;
         private string _requestedPreviewItemId;
         private string _openedPreviewItemId;
+        private string _readyPreviewItemId;
         private int _previewOpenDelayTicks;
-        private int _previewVerificationTicks;
         private int _previewOpenAttempt;
+        private int _previewTextureSettleTicks;
+        private int _previewTextureWaitTicks;
         private string _previewStateText;
         private bool _isReleasingPreview;
         private GearItemOptionViewModel _hoveredCandidate;
@@ -83,11 +90,11 @@ namespace CompanionGearUpgrades.UI
         private bool _isClanScreenVisible;
         private string _statusText;
 
-        // The preview widget binds its ViewModel while the Gauntlet movie is
-        // created. Keep the same instance for the lifetime of that movie and
-        // only open/close its tableau for each configuration session.
-        private const int PreviewOpenDelayTicks = 2;
-        private const int PreviewVerificationDelayTicks = 3;
+        // Open only after the direct ItemTableauWidget has materialized its
+        // native texture provider in the visible Gauntlet context.
+        private const int PreviewOpenDelayTicks = 1;
+        private const int PreviewTextureSettleTicks = 2;
+        private const int PreviewTextureTimeoutTicks = 30;
         private const int MaxPreviewOpenAttempts = 3;
 
         public GearPresetConfigViewModel(
@@ -149,6 +156,9 @@ namespace CompanionGearUpgrades.UI
         public ItemPreviewVM ItemPreview => _itemPreview;
 
         [DataSourceProperty]
+        public ItemCollectionElementViewModel PreviewTableau => _itemPreview?.ItemTableau;
+
+        [DataSourceProperty]
         public GearItemTooltipViewModel InspectionTooltip => _inspectionTooltip;
 
         [DataSourceProperty]
@@ -158,7 +168,8 @@ namespace CompanionGearUpgrades.UI
         public MBBindingList<GearItemComparisonViewModel> ComparisonStats => _comparisonStats;
 
         [DataSourceProperty]
-        public bool HasPreviewItem => !string.IsNullOrEmpty(_openedPreviewItemId);
+        public bool HasPreviewItem => !string.IsNullOrEmpty(_readyPreviewItemId) &&
+            string.Equals(_readyPreviewItemId, _requestedPreviewItemId, StringComparison.Ordinal);
 
         [DataSourceProperty]
         public string PreviewStateText => _previewStateText;
@@ -242,6 +253,9 @@ namespace CompanionGearUpgrades.UI
         public bool IsTierEditorMainVisible => IsWindowOpen && _page == Page.Categories;
 
         [DataSourceProperty]
+        public bool HasUnsavedChanges => !SnapshotsEqual(_working, _savedSnapshot);
+
+        [DataSourceProperty]
         public bool IsClanScreenVisible
         {
             get { return _isClanScreenVisible; }
@@ -252,8 +266,16 @@ namespace CompanionGearUpgrades.UI
 
                 _isClanScreenVisible = value;
                 OnPropertyChanged(nameof(IsClanScreenVisible));
-                if (!value)
+                if (!value && IsWindowOpen)
+                {
+                    bool discardedChanges = HasUnsavedChanges;
                     CloseWithoutSaving();
+                    if (discardedChanges)
+                    {
+                        InformationManager.DisplayMessage(new InformationMessage(
+                            "[CGU] The configuration was closed and unsaved changes were discarded."));
+                    }
+                }
             }
         }
 
@@ -362,10 +384,13 @@ namespace CompanionGearUpgrades.UI
         public HintViewModel CalculateTierPriceHint => CreateNameHint("Calculate a price from the equipment currently configured for this tier.");
 
         [DataSourceProperty]
-        public HintViewModel SaveHint => CreateNameHint("Save all temporary changes to the campaign and close the configuration.");
+        public HintViewModel SaveHint => CreateNameHint("Save all temporary changes to the campaign without closing the configuration.");
 
         [DataSourceProperty]
-        public HintViewModel CancelHint => CreateNameHint("Discard all temporary changes and close the configuration.");
+        public HintViewModel ExitHint => CreateNameHint("Close the configuration. You will be warned before unsaved changes are discarded.");
+
+        [DataSourceProperty]
+        public HintViewModel CancelHint => ExitHint;
 
         public void SetClanScreenVisible(bool visible)
         {
@@ -376,12 +401,15 @@ namespace CompanionGearUpgrades.UI
         {
             PreparePreviewSession();
             _working = null;
+            _savedSnapshot = null;
+            _hasWorkingPreset = false;
             _selectedCandidateId = null;
             ClearItemInspection();
             foreach (GearRoleOptionViewModel roleOption in _roles)
                 roleOption.SetSelected(false);
             _page = Page.Roles;
             StatusText = "Select a role and tier to edit a preset.";
+            NotifyUnsavedChangesChanged();
             NotifyPageChanged();
             IsWindowOpen = true;
         }
@@ -403,7 +431,7 @@ namespace CompanionGearUpgrades.UI
                     SetPage(Page.Slots);
                     break;
                 default:
-                    CloseWithoutSaving();
+                    ExecuteExit();
                     break;
             }
         }
@@ -412,28 +440,60 @@ namespace CompanionGearUpgrades.UI
         {
             if (_working == null)
             {
-                CloseWithoutSaving();
+                StatusText = "Select a role and tier before saving.";
                 return;
             }
 
-            GearPreset defaultPreset = _service.GetDefaultPresetOrNull(_role, _tier);
+            GearRole role = _hasWorkingPreset ? _workingRole : _role;
+            int tier = _hasWorkingPreset ? _workingTier : _tier;
+            GearPreset defaultPreset = _service.GetDefaultPresetOrNull(role, tier);
             if (defaultPreset == null)
             {
                 StatusText = "The selected preset is not available.";
                 return;
             }
 
-            _overrides.CommitSnapshot(_role, _tier, defaultPreset, _working);
-            StatusText = "Saved to the campaign overrides.";
-            _working = null;
-            ClearItemInspection();
-            IsWindowOpen = false;
-            ReleasePreviewSession();
+            _overrides.CommitSnapshot(role, tier, defaultPreset, _working);
+            _savedSnapshot = _working.Clone();
+            foreach (GearTierOptionViewModel tierOption in _tiers)
+            {
+                if (tierOption.Tier == tier)
+                    tierOption.SetCost(_working.Cost);
+            }
+
+            NotifyUnsavedChangesChanged();
+            StatusText = "Changes saved to the campaign overrides.";
         }
 
         public void ExecuteCancel()
         {
-            CloseWithoutSaving();
+            ExecuteExit();
+        }
+
+        public void ExecuteExit()
+        {
+            if (!HasUnsavedChanges)
+            {
+                CloseWithoutSaving();
+                return;
+            }
+
+            StatusText = "Unsaved changes are still pending.";
+            InformationManager.ShowInquiry(new InquiryData(
+                "CGU - Unsaved changes",
+                "You have unsaved changes. Exit and discard them?",
+                true,
+                true,
+                "Exit without saving",
+                "Keep editing",
+                () =>
+                {
+                    CloseWithoutSaving();
+                    InformationManager.DisplayMessage(new InformationMessage(
+                        "[CGU] Unsaved changes were discarded."));
+                },
+                () => StatusText = "Exit cancelled. Your unsaved changes are still available."
+            ));
         }
 
         public void ExecuteSelectItem()
@@ -450,6 +510,7 @@ namespace CompanionGearUpgrades.UI
             RefreshSlotLabels();
             NotifyCurrentItemChanged();
             RefreshItemInspection();
+            NotifyUnsavedChangesChanged();
             StatusText = $"{GetSlotName(_slot)} changed in the temporary snapshot.";
         }
 
@@ -465,6 +526,7 @@ namespace CompanionGearUpgrades.UI
             RefreshSlotLabels();
             NotifyCurrentItemChanged();
             RefreshItemInspection();
+            NotifyUnsavedChangesChanged();
             StatusText = $"{GetSlotName(_slot)} was removed from the temporary snapshot.";
         }
 
@@ -481,6 +543,7 @@ namespace CompanionGearUpgrades.UI
             RefreshSlotLabels();
             NotifyCurrentItemChanged();
             OnPropertyChanged(nameof(CurrentTierCostText));
+            NotifyUnsavedChangesChanged();
             StatusText = "The current tier was reset to its default items and price in the temporary snapshot.";
         }
 
@@ -507,6 +570,7 @@ namespace CompanionGearUpgrades.UI
 
                     _working = updatedSnapshot;
                     OnPropertyChanged(nameof(CurrentTierCostText));
+                    NotifyUnsavedChangesChanged();
                     StatusText = $"Temporary tier price changed to {_working.Cost} gold.";
                 },
                 () => StatusText = "Price unchanged."
@@ -549,6 +613,7 @@ namespace CompanionGearUpgrades.UI
 
             _working = updatedSnapshot;
             OnPropertyChanged(nameof(CurrentTierCostText));
+            NotifyUnsavedChangesChanged();
             StatusText = $"Temporary tier price calculated from equipment: {_working.Cost} gold.";
         }
 
@@ -607,6 +672,39 @@ namespace CompanionGearUpgrades.UI
 
         private void SelectTier(GearTierOptionViewModel option)
         {
+            if (_working != null && _hasWorkingPreset &&
+                _workingRole == _role && _workingTier == option.Tier)
+            {
+                _tier = option.Tier;
+                foreach (GearTierOptionViewModel tierOption in _tiers)
+                    tierOption.SetSelected(tierOption.Tier == _tier);
+
+                SetPage(Page.Categories);
+                return;
+            }
+
+            if (HasUnsavedChanges)
+            {
+                GearRole targetRole = _role;
+                InformationManager.ShowInquiry(new InquiryData(
+                    "CGU - Unsaved changes",
+                    "Switch presets and discard the unsaved changes to the current preset?",
+                    true,
+                    true,
+                    "Discard and switch",
+                    "Keep editing",
+                    () => LoadTier(targetRole, option),
+                    () => StatusText = "Preset switch cancelled. Your unsaved changes are still available."
+                ));
+                return;
+            }
+
+            LoadTier(_role, option);
+        }
+
+        private void LoadTier(GearRole role, GearTierOptionViewModel option)
+        {
+            _role = role;
             GearPreset preset = _service.GetDefaultPresetOrNull(_role, option.Tier);
             if (preset == null)
             {
@@ -619,10 +717,15 @@ namespace CompanionGearUpgrades.UI
                 tierOption.SetSelected(tierOption.Tier == _tier);
 
             _working = _service.BuildEffectiveSnapshot(_role, _tier, preset);
+            _savedSnapshot = _working?.Clone();
+            _workingRole = _role;
+            _workingTier = _tier;
+            _hasWorkingPreset = _working != null;
             _categories.Clear();
             _categories.Add(new GearCategoryOptionViewModel(GearPresetCategory.Weapons, "Weapons", SelectCategory));
             _categories.Add(new GearCategoryOptionViewModel(GearPresetCategory.Armors, "Armors", SelectCategory));
             _categories.Add(new GearCategoryOptionViewModel(GearPresetCategory.Horse, "Horse", SelectCategory));
+            NotifyUnsavedChangesChanged();
             SetPage(Page.Categories);
         }
 
@@ -855,11 +958,39 @@ namespace CompanionGearUpgrades.UI
                 : MBObjectManager.Instance.GetObject<ItemObject>(id);
         }
 
+        private static bool SnapshotsEqual(GearPresetSnapshot left, GearPresetSnapshot right)
+        {
+            if (ReferenceEquals(left, right))
+                return true;
+            if (left == null || right == null || left.Cost != right.Cost)
+                return false;
+
+            foreach (EquipmentIndex slot in GearPresetOverrides.EditableSlots)
+            {
+                string leftId;
+                string rightId;
+                bool hasLeft = left.Slots.TryGetValue(slot, out leftId);
+                bool hasRight = right.Slots.TryGetValue(slot, out rightId);
+                if (hasLeft != hasRight || !string.Equals(leftId, rightId, StringComparison.Ordinal))
+                    return false;
+            }
+
+            return true;
+        }
+
+        private void NotifyUnsavedChangesChanged()
+        {
+            OnPropertyChanged(nameof(HasUnsavedChanges));
+        }
+
         private void CloseWithoutSaving()
         {
             _working = null;
+            _savedSnapshot = null;
+            _hasWorkingPreset = false;
             _selectedCandidateId = null;
             ClearItemInspection();
+            NotifyUnsavedChangesChanged();
             IsWindowOpen = false;
             ReleasePreviewSession();
         }
@@ -867,7 +998,7 @@ namespace CompanionGearUpgrades.UI
         /// <summary>
         /// The preview follows the hovered row first, then the selected row,
         /// and finally the item already configured in the temporary preset.
-        /// This keeps one native ItemPreviewVM alive for the whole window.
+        /// The native ItemPreviewVM is scoped to one lazily-created movie.
         /// </summary>
         private void BeginCandidateInspection(GearItemOptionViewModel option)
         {
@@ -954,16 +1085,46 @@ namespace CompanionGearUpgrades.UI
         }
 
         /// <summary>
-        /// Called by the owning Gauntlet layer after the movie has had a frame
-        /// to materialize the InventoryItemPreviewWidget. ItemPreviewVM.Open
-        /// must never run from the selection command itself: at that time the
-        /// Items page can still be absent from the visual tree.
+        /// Called by the owning Gauntlet layer. ItemPreviewVM.Open is allowed
+        /// only after the visible ItemTableauWidget has a native texture
+        /// provider; this is the actual readiness boundary for the 3D host.
         /// </summary>
-        public void OnGauntletTick()
+        public void OnGauntletTick(bool isPreviewHostReady, bool isPreviewTextureReady)
         {
             if (!IsWindowOpen || _page != Page.Items || _itemPreview == null ||
                 string.IsNullOrEmpty(_requestedPreviewItemId))
                 return;
+
+            if (!isPreviewHostReady)
+            {
+                SetPreviewState("Preparing the 3D preview context...");
+                return;
+            }
+
+            if (string.Equals(_openedPreviewItemId, _requestedPreviewItemId, StringComparison.Ordinal))
+            {
+                if (string.Equals(_readyPreviewItemId, _requestedPreviewItemId, StringComparison.Ordinal))
+                    return;
+
+                if (_previewTextureSettleTicks > 0)
+                {
+                    _previewTextureSettleTicks--;
+                    return;
+                }
+
+                if (isPreviewTextureReady)
+                {
+                    _readyPreviewItemId = _requestedPreviewItemId;
+                    SetPreviewState("3D preview ready.");
+                    NotifyPreviewChanged();
+                    return;
+                }
+
+                _previewTextureWaitTicks++;
+                if (_previewTextureWaitTicks >= PreviewTextureTimeoutTicks)
+                    SchedulePreviewRetryOrReportFailure();
+                return;
+            }
 
             if (_previewOpenDelayTicks > 0)
             {
@@ -971,15 +1132,8 @@ namespace CompanionGearUpgrades.UI
                 return;
             }
 
-            if (_previewVerificationTicks > 0)
-            {
-                _previewVerificationTicks--;
-                if (_previewVerificationTicks == 0)
-                    VerifyPreviewInitialization();
-                return;
-            }
-
-            if (string.IsNullOrEmpty(_openedPreviewItemId) && _previewOpenAttempt < MaxPreviewOpenAttempts)
+            if (!string.Equals(_openedPreviewItemId, _requestedPreviewItemId, StringComparison.Ordinal) &&
+                _previewOpenAttempt < MaxPreviewOpenAttempts)
                 OpenRequestedPreview();
         }
 
@@ -987,19 +1141,20 @@ namespace CompanionGearUpgrades.UI
         {
             string itemId = item != null ? item.StringId : null;
             if (string.Equals(_requestedPreviewItemId, itemId, StringComparison.Ordinal) &&
-                (!string.IsNullOrEmpty(_openedPreviewItemId) || _previewOpenDelayTicks > 0 || _previewVerificationTicks > 0))
+                (!string.IsNullOrEmpty(_openedPreviewItemId) || _previewOpenDelayTicks > 0))
                 return;
 
             _requestedPreviewItemId = itemId;
             _openedPreviewItemId = null;
+            _readyPreviewItemId = null;
             _previewOpenAttempt = 0;
-            _previewVerificationTicks = 0;
+            _previewTextureSettleTicks = 0;
+            _previewTextureWaitTicks = 0;
 
             if (item == null)
             {
                 _previewOpenDelayTicks = 0;
-                if (_itemPreview != null)
-                    _itemPreview.Close();
+                CloseAndClearNativePreview();
 
                 SetPreviewState("Hover or select an item to preview it.");
                 NotifyPreviewChanged();
@@ -1017,8 +1172,10 @@ namespace CompanionGearUpgrades.UI
                 return;
 
             _openedPreviewItemId = null;
+            _readyPreviewItemId = null;
             _previewOpenAttempt = 0;
-            _previewVerificationTicks = 0;
+            _previewTextureSettleTicks = 0;
+            _previewTextureWaitTicks = 0;
             _previewOpenDelayTicks = PreviewOpenDelayTicks;
             SetPreviewState("Loading 3D preview...");
             NotifyPreviewChanged();
@@ -1037,9 +1194,14 @@ namespace CompanionGearUpgrades.UI
             try
             {
                 _previewOpenAttempt++;
+                ClearNativePreviewTableau();
                 _itemPreview.Open(new EquipmentElement(item));
-                _previewVerificationTicks = PreviewVerificationDelayTicks;
-                SetPreviewState("Loading 3D preview...");
+                _openedPreviewItemId = _requestedPreviewItemId;
+                _readyPreviewItemId = null;
+                _previewTextureSettleTicks = PreviewTextureSettleTicks;
+                _previewTextureWaitTicks = 0;
+                SetPreviewState("Rendering 3D preview...");
+                NotifyPreviewChanged();
             }
             catch (Exception)
             {
@@ -1047,58 +1209,30 @@ namespace CompanionGearUpgrades.UI
             }
         }
 
-        private void VerifyPreviewInitialization()
+        private void SchedulePreviewRetryOrReportFailure()
         {
-            bool tableauMatchesItem = _itemPreview != null &&
-                _itemPreview.ItemTableau != null &&
-                string.Equals(_itemPreview.ItemTableau.StringId, _requestedPreviewItemId, StringComparison.Ordinal);
+            _openedPreviewItemId = null;
+            _readyPreviewItemId = null;
+            _previewTextureSettleTicks = 0;
+            _previewTextureWaitTicks = 0;
+            ClearNativePreviewTableau();
 
-            if (tableauMatchesItem)
+            if (_previewOpenAttempt < MaxPreviewOpenAttempts)
             {
-                _openedPreviewItemId = _requestedPreviewItemId;
-                SetPreviewState("3D preview ready.");
+                _previewOpenDelayTicks = PreviewOpenDelayTicks;
+                SetPreviewState("Retrying 3D preview...");
                 NotifyPreviewChanged();
                 return;
             }
 
-            SchedulePreviewRetryOrReportFailure();
-        }
-
-        private void SchedulePreviewRetryOrReportFailure()
-        {
-            if (_previewOpenAttempt < MaxPreviewOpenAttempts)
-            {
-                _previewVerificationTicks = 0;
-                _previewOpenDelayTicks = PreviewOpenDelayTicks;
-                SetPreviewState("Retrying 3D preview...");
-                return;
-            }
-
-            _openedPreviewItemId = null;
             SetPreviewState("3D preview is temporarily unavailable. Hover the item again to retry.");
             NotifyPreviewChanged();
         }
 
         private void PreparePreviewSession()
         {
-            _requestedPreviewItemId = null;
-            _openedPreviewItemId = null;
-            _previewOpenDelayTicks = 0;
-            _previewVerificationTicks = 0;
-            _previewOpenAttempt = 0;
-
-            if (_itemPreview != null)
-            {
-                _isReleasingPreview = true;
-                try
-                {
-                    _itemPreview.Close();
-                }
-                finally
-                {
-                    _isReleasingPreview = false;
-                }
-            }
+            ResetPreviewTracking();
+            CloseAndClearNativePreview();
 
             SetPreviewState("Preview will load when an item is selected.");
             NotifyPreviewChanged();
@@ -1106,27 +1240,46 @@ namespace CompanionGearUpgrades.UI
 
         private void ReleasePreviewSession()
         {
-            _requestedPreviewItemId = null;
-            _openedPreviewItemId = null;
-            _previewOpenDelayTicks = 0;
-            _previewVerificationTicks = 0;
-            _previewOpenAttempt = 0;
-
-            if (_itemPreview != null)
-            {
-                _isReleasingPreview = true;
-                try
-                {
-                    _itemPreview.Close();
-                }
-                finally
-                {
-                    _isReleasingPreview = false;
-                }
-            }
+            ResetPreviewTracking();
+            CloseAndClearNativePreview();
 
             SetPreviewState("Preview is closed.");
             NotifyPreviewChanged();
+        }
+
+        private void ResetPreviewTracking()
+        {
+            _requestedPreviewItemId = null;
+            _openedPreviewItemId = null;
+            _readyPreviewItemId = null;
+            _previewOpenDelayTicks = 0;
+            _previewOpenAttempt = 0;
+            _previewTextureSettleTicks = 0;
+            _previewTextureWaitTicks = 0;
+        }
+
+        private void CloseAndClearNativePreview()
+        {
+            if (_itemPreview == null)
+                return;
+
+            _isReleasingPreview = true;
+            try
+            {
+                if (_itemPreview.IsSelected)
+                    _itemPreview.Close();
+                ClearNativePreviewTableau();
+            }
+            finally
+            {
+                _isReleasingPreview = false;
+            }
+        }
+
+        private void ClearNativePreviewTableau()
+        {
+            if (_itemPreview?.ItemTableau != null)
+                _itemPreview.ItemTableau.StringId = string.Empty;
         }
 
         private void SetPreviewState(string state)
@@ -1161,6 +1314,9 @@ namespace CompanionGearUpgrades.UI
         private void OnItemPreviewClosed()
         {
             _openedPreviewItemId = null;
+            _readyPreviewItemId = null;
+            _previewTextureSettleTicks = 0;
+            _previewTextureWaitTicks = 0;
             NotifyPreviewChanged();
 
             if (_isReleasingPreview || !IsWindowOpen || _page != Page.Items ||
@@ -1168,7 +1324,6 @@ namespace CompanionGearUpgrades.UI
                 return;
 
             _previewOpenAttempt = 0;
-            _previewVerificationTicks = 0;
             _previewOpenDelayTicks = PreviewOpenDelayTicks;
             SetPreviewState("Reinitializing 3D preview...");
         }
@@ -1397,6 +1552,16 @@ namespace CompanionGearUpgrades.UI
         public void SetSelected(bool selected)
         {
             IsSelected = selected;
+        }
+
+        public void SetCost(int cost)
+        {
+            if (Cost == cost)
+                return;
+
+            Cost = cost;
+            OnPropertyChanged(nameof(Name));
+            OnPropertyChanged(nameof(TierCostText));
         }
     }
 
