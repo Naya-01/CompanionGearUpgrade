@@ -35,7 +35,20 @@
                 </Widget>
 
                 <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" IsVisible="@IsCategorySelectionVisible">
-                  <Children><ListPanel WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren" DataSource="{CategoryOptions}" StackLayout.LayoutMethod="VerticalTopToBottom"><ItemTemplate><ButtonWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="58" MarginTop="4" MarginBottom="4" Brush="ButtonBrush1" Command.Click="ExecuteSelect" DoNotPassEventsToChildren="true"><Children><TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Text="@Name" HorizontalAlignment="Center" VerticalAlignment="Center" /></Children></ButtonWidget></ItemTemplate></ListPanel></Children>
+                  <Children>
+                    <ListPanel WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" StackLayout.LayoutMethod="VerticalTopToBottom">
+                      <Children>
+                        <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="28" Text="@CurrentTierCostText" HorizontalAlignment="Center" Brush="Clan.TabControl.Text" />
+                        <ListPanel WidthSizePolicy="CoverChildren" HeightSizePolicy="Fixed" SuggestedHeight="52" HorizontalAlignment="Center" MarginTop="6" MarginBottom="8" StackLayout.LayoutMethod="HorizontalLeftToRight">
+                          <Children>
+                            <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="240" SuggestedHeight="44" Brush="ButtonBrush1" Command.Click="ExecuteResetTierToDefault" DoNotPassEventsToChildren="true"><Children><TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Text="Reset this tier to default" HorizontalAlignment="Center" VerticalAlignment="Center" /></Children></ButtonWidget>
+                            <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="180" SuggestedHeight="44" MarginLeft="12" Brush="ButtonBrush1" Command.Click="ExecuteSetTierPrice" DoNotPassEventsToChildren="true"><Children><TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Text="Set price (gold)" HorizontalAlignment="Center" VerticalAlignment="Center" /></Children></ButtonWidget>
+                          </Children>
+                        </ListPanel>
+                        <ListPanel WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" DataSource="{CategoryOptions}" StackLayout.LayoutMethod="VerticalTopToBottom"><ItemTemplate><ButtonWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="58" MarginTop="4" MarginBottom="4" Brush="ButtonBrush1" Command.Click="ExecuteSelect" DoNotPassEventsToChildren="true"><Children><TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Text="@Name" HorizontalAlignment="Center" VerticalAlignment="Center" /></Children></ButtonWidget></ItemTemplate></ListPanel>
+                      </Children>
+                    </ListPanel>
+                  </Children>
                 </Widget>
 
                 <Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" IsVisible="@IsSlotSelectionVisible">
@@ -97,7 +110,22 @@
                                 </ListPanel>
                               </Children>
                             </Widget>
-                            <ListPanel WidthSizePolicy="CoverChildren" HeightSizePolicy="Fixed" SuggestedHeight="50" HorizontalAlignment="Center" VerticalAlignment="Bottom" MarginBottom="14" StackLayout.LayoutMethod="HorizontalLeftToRight"><Children><ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="130" SuggestedHeight="44" Brush="ButtonBrush1" Command.Click="ExecuteSelectItem" DoNotPassEventsToChildren="true"><Children><TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Text="Select" HorizontalAlignment="Center" VerticalAlignment="Center" /></Children></ButtonWidget><ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="130" SuggestedHeight="44" MarginLeft="12" Brush="ButtonBrush1" Command.Click="ExecuteRemoveItem" DoNotPassEventsToChildren="true"><Children><TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Text="Remove" HorizontalAlignment="Center" VerticalAlignment="Center" /></Children></ButtonWidget></Children></ListPanel>
+                            <ListPanel WidthSizePolicy="CoverChildren" HeightSizePolicy="Fixed" SuggestedHeight="50" HorizontalAlignment="Center" VerticalAlignment="Bottom" MarginBottom="14" StackLayout.LayoutMethod="HorizontalLeftToRight">
+                              <Children>
+                                <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="130" SuggestedHeight="44" Brush="ButtonBrush1" Command.Click="ExecuteSelectItem" DoNotPassEventsToChildren="true">
+                                  <Children>
+                                    <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Text="Select" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    <HintWidget DataSource="{SelectItemHint}" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Command.HoverBegin="ExecuteBeginHint" Command.HoverEnd="ExecuteEndHint" IsDisabled="true" />
+                                  </Children>
+                                </ButtonWidget>
+                                <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="130" SuggestedHeight="44" MarginLeft="12" Brush="ButtonBrush1" Command.Click="ExecuteRemoveItem" DoNotPassEventsToChildren="true">
+                                  <Children>
+                                    <TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Text="Remove" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                    <HintWidget DataSource="{RemoveItemHint}" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Command.HoverBegin="ExecuteBeginHint" Command.HoverEnd="ExecuteEndHint" IsDisabled="true" />
+                                  </Children>
+                                </ButtonWidget>
+                              </Children>
+                            </ListPanel>
                           </Children>
                         </Widget>
 
@@ -141,8 +169,8 @@
             <ListPanel WidthSizePolicy="CoverChildren" HeightSizePolicy="Fixed" SuggestedHeight="54" HorizontalAlignment="Center" VerticalAlignment="Bottom" MarginBottom="22" StackLayout.LayoutMethod="HorizontalLeftToRight">
               <Children>
                 <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="150" SuggestedHeight="44" Brush="ButtonBrush1" Command.Click="ExecuteBack" DoNotPassEventsToChildren="true"><Children><TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Text="Back" HorizontalAlignment="Center" VerticalAlignment="Center" /></Children></ButtonWidget>
-                <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="150" SuggestedHeight="44" MarginLeft="12" Brush="ButtonBrush1" Command.Click="ExecuteSave" DoNotPassEventsToChildren="true"><Children><TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Text="Save" HorizontalAlignment="Center" VerticalAlignment="Center" /></Children></ButtonWidget>
-                <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="150" SuggestedHeight="44" MarginLeft="12" Brush="ButtonBrush1" Command.Click="ExecuteCancel" DoNotPassEventsToChildren="true"><Children><TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Text="Cancel" HorizontalAlignment="Center" VerticalAlignment="Center" /></Children></ButtonWidget>
+                <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="150" SuggestedHeight="44" MarginLeft="12" Brush="ButtonBrush1" Command.Click="ExecuteSave" DoNotPassEventsToChildren="true" IsVisible="@IsTierEditorMainVisible"><Children><TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Text="Save" HorizontalAlignment="Center" VerticalAlignment="Center" /><HintWidget DataSource="{SaveHint}" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Command.HoverBegin="ExecuteBeginHint" Command.HoverEnd="ExecuteEndHint" IsDisabled="true" /></Children></ButtonWidget>
+                <ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="150" SuggestedHeight="44" MarginLeft="12" Brush="ButtonBrush1" Command.Click="ExecuteCancel" DoNotPassEventsToChildren="true" IsVisible="@IsTierEditorMainVisible"><Children><TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Text="Cancel" HorizontalAlignment="Center" VerticalAlignment="Center" /><HintWidget DataSource="{CancelHint}" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Command.HoverBegin="ExecuteBeginHint" Command.HoverEnd="ExecuteEndHint" IsDisabled="true" /></Children></ButtonWidget>
               </Children>
             </ListPanel>
           </Children>

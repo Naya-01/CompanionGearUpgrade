@@ -40,6 +40,27 @@ namespace CompanionGearUpgrades.Dialog
             _returnToConversationRoot = returnToConversationRoot;
         }
 
+        // Shared by the dialogue and Clan Gauntlet editors so both paths have
+        // exactly the same reset and price-validation behavior.
+        internal static GearPresetSnapshot CreateDefaultTierSnapshot(CompanionGearUpgradeService service, GearRole role, int tier)
+        {
+            GearPreset defaultPreset = service != null ? service.GetDefaultPresetOrNull(role, tier) : null;
+            return defaultPreset == null
+                ? null
+                : new GearPresetSnapshot(defaultPreset.Cost, new Dictionary<EquipmentIndex, string>(defaultPreset.Slots));
+        }
+
+        internal static bool TrySetSnapshotPrice(GearPresetSnapshot snapshot, string text, out GearPresetSnapshot updatedSnapshot)
+        {
+            updatedSnapshot = snapshot;
+            int value;
+            if (snapshot == null || !int.TryParse(text, out value) || value < 0)
+                return false;
+
+            updatedSnapshot = new GearPresetSnapshot(value, snapshot.Slots);
+            return true;
+        }
+
         public void Open()
         {
             ShowRoleSelection();
@@ -327,16 +348,14 @@ namespace CompanionGearUpgrades.Dialog
 
         private void ResetWorkingToDefault()
         {
-            GearPreset defaultPreset = _service.GetDefaultPresetOrNull(_role, _tier);
-            if (defaultPreset == null)
+            GearPresetSnapshot defaultSnapshot = CreateDefaultTierSnapshot(_service, _role, _tier);
+            if (defaultSnapshot == null)
             {
                 InformationManager.DisplayMessage(new InformationMessage("[CGU] Missing preset."));
                 return;
             }
 
-            _working = new GearPresetSnapshot(defaultPreset.Cost,
-                                  new Dictionary<EquipmentIndex, string>(defaultPreset.Slots)
-                                  );
+            _working = defaultSnapshot;
         }
 
         private void PromptSetPrice_FromEditMenu()
@@ -350,14 +369,15 @@ namespace CompanionGearUpgrades.Dialog
                 "Cancel",
                 text =>
                 {
-                    if (!int.TryParse(text, out int value) || value < 0)
+                    GearPresetSnapshot updatedSnapshot;
+                    if (!TrySetSnapshotPrice(_working, text, out updatedSnapshot))
                     {
                         InformationManager.DisplayMessage(new InformationMessage("[CGU] Invalid number."));
                         ShowEditMenu();
                         return;
                     }
 
-                    _working = new GearPresetSnapshot(value, _working.Slots);
+                    _working = updatedSnapshot;
                     ShowEditMenu();
                 },
                 ShowEditMenu

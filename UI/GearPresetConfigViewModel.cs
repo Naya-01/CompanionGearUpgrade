@@ -1,8 +1,10 @@
 using CompanionGearUpgrades.Data;
+using CompanionGearUpgrades.Dialog;
 using CompanionGearUpgrades.Domain;
 using CompanionGearUpgrades.Services;
 using System;
 using System.Collections.Generic;
+using TaleWorlds.CampaignSystem;
 using TaleWorlds.CampaignSystem.ViewModelCollection.Inventory;
 using TaleWorlds.Core;
 using TaleWorlds.Core.ViewModelCollection.Information;
@@ -199,6 +201,7 @@ namespace CompanionGearUpgrades.UI
                 OnPropertyChanged(nameof(IsCategorySelectionVisible));
                 OnPropertyChanged(nameof(IsSlotSelectionVisible));
                 OnPropertyChanged(nameof(IsItemSelectionVisible));
+                OnPropertyChanged(nameof(IsTierEditorMainVisible));
                 _windowStateChanged?.Invoke(value);
             }
         }
@@ -217,6 +220,9 @@ namespace CompanionGearUpgrades.UI
 
         [DataSourceProperty]
         public bool IsItemSelectionVisible => IsWindowOpen && _page == Page.Items;
+
+        [DataSourceProperty]
+        public bool IsTierEditorMainVisible => IsWindowOpen && _page == Page.Categories;
 
         [DataSourceProperty]
         public bool IsClanScreenVisible
@@ -296,6 +302,9 @@ namespace CompanionGearUpgrades.UI
         public string CurrentItemStringIdLabel => $"StringId: {CurrentItemStringId}";
 
         [DataSourceProperty]
+        public string CurrentTierCostText => _working == null ? "" : $"Current price: {_working.Cost} gold";
+
+        [DataSourceProperty]
         public string CurrentItemDisplayName => TruncatePreviewName(CurrentItemName);
 
         [DataSourceProperty]
@@ -319,6 +328,18 @@ namespace CompanionGearUpgrades.UI
 
         [DataSourceProperty]
         public HintViewModel SelectedCandidateNameHint => CreateNameHint(SelectedCandidateName);
+
+        [DataSourceProperty]
+        public HintViewModel SelectItemHint => CreateNameHint("The selected item is applied to the temporary tier snapshot.");
+
+        [DataSourceProperty]
+        public HintViewModel RemoveItemHint => CreateNameHint("The configured item is removed from the temporary tier snapshot.");
+
+        [DataSourceProperty]
+        public HintViewModel SaveHint => CreateNameHint("Save all temporary changes to the campaign and close the configuration.");
+
+        [DataSourceProperty]
+        public HintViewModel CancelHint => CreateNameHint("Discard all temporary changes and close the configuration.");
 
         public void SetClanScreenVisible(bool visible)
         {
@@ -415,7 +436,52 @@ namespace CompanionGearUpgrades.UI
             RefreshSlotLabels();
             NotifyCurrentItemChanged();
             RefreshItemInspection();
-            StatusText = $"{GetSlotName(_slot)} will be empty after Save.";
+            StatusText = $"{GetSlotName(_slot)} was removed from the temporary snapshot.";
+        }
+
+        public void ExecuteResetTierToDefault()
+        {
+            GearPresetSnapshot defaultSnapshot = GearPresetConfigUi.CreateDefaultTierSnapshot(_service, _role, _tier);
+            if (defaultSnapshot == null)
+            {
+                StatusText = "The selected preset is not available.";
+                return;
+            }
+
+            _working = defaultSnapshot;
+            RefreshSlotLabels();
+            NotifyCurrentItemChanged();
+            OnPropertyChanged(nameof(CurrentTierCostText));
+            StatusText = "The current tier was reset to its default items and price in the temporary snapshot.";
+        }
+
+        public void ExecuteSetTierPrice()
+        {
+            if (_working == null)
+                return;
+
+            InformationManager.ShowTextInquiry(new TextInquiryData(
+                "CGU - Set price",
+                "Enter the price in gold (number):",
+                true,
+                true,
+                "OK",
+                "Cancel",
+                text =>
+                {
+                    GearPresetSnapshot updatedSnapshot;
+                    if (!GearPresetConfigUi.TrySetSnapshotPrice(_working, text, out updatedSnapshot))
+                    {
+                        StatusText = "Invalid price. Enter a non-negative whole number.";
+                        return;
+                    }
+
+                    _working = updatedSnapshot;
+                    OnPropertyChanged(nameof(CurrentTierCostText));
+                    StatusText = $"Temporary tier price changed to {_working.Cost} gold.";
+                },
+                () => StatusText = "Price unchanged."
+            ));
         }
 
         private void SelectRole(GearRoleOptionViewModel option)
@@ -596,7 +662,9 @@ namespace CompanionGearUpgrades.UI
             OnPropertyChanged(nameof(IsCategorySelectionVisible));
             OnPropertyChanged(nameof(IsSlotSelectionVisible));
             OnPropertyChanged(nameof(IsItemSelectionVisible));
+            OnPropertyChanged(nameof(IsTierEditorMainVisible));
             OnPropertyChanged(nameof(Breadcrumb));
+            OnPropertyChanged(nameof(CurrentTierCostText));
         }
 
         private void NotifyCurrentItemChanged()
