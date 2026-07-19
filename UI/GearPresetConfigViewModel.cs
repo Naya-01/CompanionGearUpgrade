@@ -82,6 +82,13 @@ namespace CompanionGearUpgrades.UI
         private bool _isClanScreenVisible;
         private string _statusText;
 
+        // The preview widget binds its ViewModel while the Gauntlet movie is
+        // created. Keep the same instance for the lifetime of that movie and
+        // only open/close its tableau for each configuration session.
+        private const int PreviewOpenDelayTicks = 2;
+        private const int PreviewVerificationDelayTicks = 3;
+        private const int MaxPreviewOpenAttempts = 3;
+
         public GearPresetConfigViewModel(
             CompanionGearUpgradeService service,
             GearPresetOverrides overrides,
@@ -100,6 +107,7 @@ namespace CompanionGearUpgrades.UI
             _filters = new MBBindingList<GearItemFilterOptionViewModel>();
             _sortOptions = new MBBindingList<GearItemSortOptionViewModel>();
             _comparisonStats = new MBBindingList<GearItemComparisonViewModel>();
+            _itemPreview = new ItemPreviewVM(OnItemPreviewClosed);
             _inspectionTooltip = new GearItemTooltipViewModel();
             _configuredTooltip = new GearItemTooltipViewModel();
             _itemSortOrder = GearItemSortOrder.ValueAscending;
@@ -159,6 +167,12 @@ namespace CompanionGearUpgrades.UI
 
         [DataSourceProperty]
         public bool HasComparison => _comparisonStats.Count > 0;
+
+        [DataSourceProperty]
+        public bool HasSingleInspection => HasInspectionItem && !HasHoveredComparison;
+
+        [DataSourceProperty]
+        public bool HasHoveredComparison => _hoveredCandidate != null && HasComparison;
 
         [DataSourceProperty]
         public string ItemSearchText
@@ -302,7 +316,7 @@ namespace CompanionGearUpgrades.UI
         public string CurrentItemStringIdLabel => $"StringId: {CurrentItemStringId}";
 
         [DataSourceProperty]
-        public string CurrentTierCostText => _working == null ? "" : $"Current price: {_working.Cost} gold";
+        public string CurrentTierCostText => _working == null ? "" : $"{_working.Cost} gold";
 
         [DataSourceProperty]
         public string CurrentItemDisplayName => TruncatePreviewName(CurrentItemName);
@@ -336,6 +350,15 @@ namespace CompanionGearUpgrades.UI
         public HintViewModel RemoveItemHint => CreateNameHint("The configured item is removed from the temporary tier snapshot.");
 
         [DataSourceProperty]
+        public HintViewModel ResetTierHint => CreateNameHint("Restore this tier's default equipment and price in the temporary snapshot.");
+
+        [DataSourceProperty]
+        public HintViewModel SetTierPriceHint => CreateNameHint("Set a custom gold price for this tier in the temporary snapshot.");
+
+        [DataSourceProperty]
+        public HintViewModel CalculateTierPriceHint => CreateNameHint("Calculate a price from the equipment currently configured for this tier.");
+
+        [DataSourceProperty]
         public HintViewModel SaveHint => CreateNameHint("Save all temporary changes to the campaign and close the configuration.");
 
         [DataSourceProperty]
@@ -348,7 +371,7 @@ namespace CompanionGearUpgrades.UI
 
         public void ExecuteOpenConfiguration()
         {
-            CreatePreviewSession();
+            PreparePreviewSession();
             _working = null;
             _selectedCandidateId = null;
             ClearItemInspection();
@@ -839,18 +862,32 @@ namespace CompanionGearUpgrades.UI
         private void RefreshItemInspection()
         {
             ItemObject configuredItem = FindItem(GetWorkingSlotId(_slot));
-            ItemObject inspectedItem = GetInspectedItem(configuredItem);
+            ItemObject inspectedItem = GetTooltipItem(configuredItem);
+            ItemObject previewItem = GetPreviewItem(configuredItem);
+            bool hasDistinctHoveredItem = _hoveredCandidate != null &&
+                configuredItem != null &&
+                !string.Equals(_hoveredCandidate.ItemId, configuredItem.StringId, StringComparison.Ordinal);
 
             _inspectionTooltip.SetItem(inspectedItem);
-            _configuredTooltip.SetItem(configuredItem);
+            _configuredTooltip.SetItem(hasDistinctHoveredItem ? configuredItem : null);
             RebuildComparison(inspectedItem, configuredItem);
-            SetPreviewItem(inspectedItem);
+            SetPreviewItem(previewItem);
 
             OnPropertyChanged(nameof(HasInspectionItem));
             OnPropertyChanged(nameof(HasComparison));
+            OnPropertyChanged(nameof(HasSingleInspection));
+            OnPropertyChanged(nameof(HasHoveredComparison));
         }
 
-        private ItemObject GetInspectedItem(ItemObject configuredItem)
+        private ItemObject GetTooltipItem(ItemObject configuredItem)
+        {
+            if (_hoveredCandidate != null)
+                return _hoveredCandidate.Item;
+
+            return configuredItem;
+        }
+
+        private ItemObject GetPreviewItem(ItemObject configuredItem)
         {
             if (_hoveredCandidate != null)
                 return _hoveredCandidate.Item;
@@ -913,7 +950,7 @@ namespace CompanionGearUpgrades.UI
                 return;
             }
 
-            if (string.IsNullOrEmpty(_openedPreviewItemId) && _previewOpenAttempt < 2)
+            if (string.IsNullOrEmpty(_openedPreviewItemId) && _previewOpenAttempt < MaxPreviewOpenAttempts)
                 OpenRequestedPreview();
         }
 
@@ -940,7 +977,7 @@ namespace CompanionGearUpgrades.UI
                 return;
             }
 
-            _previewOpenDelayTicks = 2;
+            _previewOpenDelayTicks = PreviewOpenDelayTicks;
             SetPreviewState("Loading 3D preview...");
             NotifyPreviewChanged();
         }
@@ -953,7 +990,7 @@ namespace CompanionGearUpgrades.UI
             _openedPreviewItemId = null;
             _previewOpenAttempt = 0;
             _previewVerificationTicks = 0;
-            _previewOpenDelayTicks = 2;
+            _previewOpenDelayTicks = PreviewOpenDelayTicks;
             SetPreviewState("Loading 3D preview...");
             NotifyPreviewChanged();
         }
@@ -972,7 +1009,7 @@ namespace CompanionGearUpgrades.UI
             {
                 _previewOpenAttempt++;
                 _itemPreview.Open(new EquipmentElement(item));
-                _previewVerificationTicks = 1;
+                _previewVerificationTicks = PreviewVerificationDelayTicks;
                 SetPreviewState("Loading 3D preview...");
             }
             catch (Exception)
@@ -1000,10 +1037,10 @@ namespace CompanionGearUpgrades.UI
 
         private void SchedulePreviewRetryOrReportFailure()
         {
-            if (_previewOpenAttempt < 2)
+            if (_previewOpenAttempt < MaxPreviewOpenAttempts)
             {
                 _previewVerificationTicks = 0;
-                _previewOpenDelayTicks = 1;
+                _previewOpenDelayTicks = PreviewOpenDelayTicks;
                 SetPreviewState("Retrying 3D preview...");
                 return;
             }
@@ -1013,17 +1050,28 @@ namespace CompanionGearUpgrades.UI
             NotifyPreviewChanged();
         }
 
-        private void CreatePreviewSession()
+        private void PreparePreviewSession()
         {
-            ReleasePreviewSession();
-            _itemPreview = new ItemPreviewVM(OnItemPreviewClosed);
             _requestedPreviewItemId = null;
             _openedPreviewItemId = null;
             _previewOpenDelayTicks = 0;
             _previewVerificationTicks = 0;
             _previewOpenAttempt = 0;
+
+            if (_itemPreview != null)
+            {
+                _isReleasingPreview = true;
+                try
+                {
+                    _itemPreview.Close();
+                }
+                finally
+                {
+                    _isReleasingPreview = false;
+                }
+            }
+
             SetPreviewState("Preview will load when an item is selected.");
-            OnPropertyChanged(nameof(ItemPreview));
             NotifyPreviewChanged();
         }
 
@@ -1041,17 +1089,14 @@ namespace CompanionGearUpgrades.UI
                 try
                 {
                     _itemPreview.Close();
-                    _itemPreview.OnFinalize();
                 }
                 finally
                 {
                     _isReleasingPreview = false;
-                    _itemPreview = null;
                 }
             }
 
             SetPreviewState("Preview is closed.");
-            OnPropertyChanged(nameof(ItemPreview));
             NotifyPreviewChanged();
         }
 
@@ -1079,6 +1124,8 @@ namespace CompanionGearUpgrades.UI
 
             OnPropertyChanged(nameof(HasInspectionItem));
             OnPropertyChanged(nameof(HasComparison));
+            OnPropertyChanged(nameof(HasSingleInspection));
+            OnPropertyChanged(nameof(HasHoveredComparison));
         }
 
         private void OnItemPreviewClosed()
@@ -1092,7 +1139,7 @@ namespace CompanionGearUpgrades.UI
 
             _previewOpenAttempt = 0;
             _previewVerificationTicks = 0;
-            _previewOpenDelayTicks = 1;
+            _previewOpenDelayTicks = PreviewOpenDelayTicks;
             SetPreviewState("Reinitializing 3D preview...");
         }
 
@@ -1100,6 +1147,21 @@ namespace CompanionGearUpgrades.UI
         {
             ClearItemInspection();
             ReleasePreviewSession();
+
+            if (_itemPreview != null)
+            {
+                _isReleasingPreview = true;
+                try
+                {
+                    _itemPreview.OnFinalize();
+                }
+                finally
+                {
+                    _isReleasingPreview = false;
+                    _itemPreview = null;
+                }
+            }
+
             base.OnFinalize();
         }
 
@@ -1254,6 +1316,12 @@ namespace CompanionGearUpgrades.UI
         [DataSourceProperty]
         public string Name => $"Tier {Tier} ({Cost} gold)";
 
+        [DataSourceProperty]
+        public string TierName => $"Tier {Tier}";
+
+        [DataSourceProperty]
+        public string TierCostText => $"{Cost} gold";
+
         private int Cost { get; set; }
 
         public void ExecuteSelect()
@@ -1270,6 +1338,7 @@ namespace CompanionGearUpgrades.UI
         {
             Category = category;
             Name = name;
+            IconBrush = GetIconBrush(category);
             _onSelected = onSelected;
         }
 
@@ -1278,9 +1347,25 @@ namespace CompanionGearUpgrades.UI
         [DataSourceProperty]
         public string Name { get; private set; }
 
+        [DataSourceProperty]
+        public string IconBrush { get; private set; }
+
         public void ExecuteSelect()
         {
             _onSelected?.Invoke(this);
+        }
+
+        private static string GetIconBrush(GearPresetCategory category)
+        {
+            switch (category)
+            {
+                case GearPresetCategory.Weapons:
+                    return "InventoryFilterWeaponsButton";
+                case GearPresetCategory.Armors:
+                    return "InventoryFilterArmorsButton";
+                default:
+                    return "InventoryFilterMountsButton";
+            }
         }
     }
 
@@ -1428,6 +1513,7 @@ namespace CompanionGearUpgrades.UI
 
         public string ItemTypeName { get; private set; }
 
+        [DataSourceProperty]
         public int ItemValue { get; private set; }
 
         [DataSourceProperty]
