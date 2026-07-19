@@ -5,8 +5,10 @@ using System;
 using System.Collections.Generic;
 using TaleWorlds.CampaignSystem.ViewModelCollection.Inventory;
 using TaleWorlds.Core;
+using TaleWorlds.Core.ViewModelCollection.Information;
 using TaleWorlds.Core.ViewModelCollection.ImageIdentifiers;
 using TaleWorlds.Library;
+using TaleWorlds.Localization;
 using TaleWorlds.ObjectSystem;
 
 namespace CompanionGearUpgrades.UI
@@ -16,6 +18,12 @@ namespace CompanionGearUpgrades.UI
         Weapons,
         Armors,
         Horse
+    }
+
+    public enum GearItemSortOrder
+    {
+        ValueAscending,
+        ValueDescending
     }
 
     /// <summary>
@@ -44,6 +52,7 @@ namespace CompanionGearUpgrades.UI
         private readonly MBBindingList<GearItemOptionViewModel> _items;
         private readonly List<GearItemOptionViewModel> _allItems;
         private readonly MBBindingList<GearItemFilterOptionViewModel> _filters;
+        private readonly MBBindingList<GearItemSortOptionViewModel> _sortOptions;
         private readonly MBBindingList<GearItemComparisonViewModel> _comparisonStats;
         private readonly ItemPreviewVM _itemPreview;
         private readonly GearItemTooltipViewModel _inspectionTooltip;
@@ -57,6 +66,7 @@ namespace CompanionGearUpgrades.UI
         private string _selectedCandidateId;
         private string _selectedItemTypeFilter;
         private string _itemSearchText;
+        private GearItemSortOrder _itemSortOrder;
         private string _previewItemId;
         private GearItemOptionViewModel _hoveredCandidate;
         private Page _page;
@@ -80,16 +90,21 @@ namespace CompanionGearUpgrades.UI
             _items = new MBBindingList<GearItemOptionViewModel>();
             _allItems = new List<GearItemOptionViewModel>();
             _filters = new MBBindingList<GearItemFilterOptionViewModel>();
+            _sortOptions = new MBBindingList<GearItemSortOptionViewModel>();
             _comparisonStats = new MBBindingList<GearItemComparisonViewModel>();
             _itemPreview = new ItemPreviewVM(OnItemPreviewClosed);
             _inspectionTooltip = new GearItemTooltipViewModel();
             _configuredTooltip = new GearItemTooltipViewModel();
+            _itemSortOrder = GearItemSortOrder.ValueAscending;
             _statusText = "Select a role and tier to edit a preset.";
             _page = Page.Roles;
 
             _roles.Add(new GearRoleOptionViewModel(GearRole.Infantry, "Infantry", SelectRole));
             _roles.Add(new GearRoleOptionViewModel(GearRole.Archer, "Archer", SelectRole));
             _roles.Add(new GearRoleOptionViewModel(GearRole.Lancer, "Lancer", SelectRole));
+            _sortOptions.Add(new GearItemSortOptionViewModel(GearItemSortOrder.ValueAscending, "Price: low to high", SelectSort));
+            _sortOptions.Add(new GearItemSortOptionViewModel(GearItemSortOrder.ValueDescending, "Price: high to low", SelectSort));
+            SetSelectedSortOption();
         }
 
         [DataSourceProperty]
@@ -109,6 +124,9 @@ namespace CompanionGearUpgrades.UI
 
         [DataSourceProperty]
         public MBBindingList<GearItemFilterOptionViewModel> FilterOptions => _filters;
+
+        [DataSourceProperty]
+        public MBBindingList<GearItemSortOptionViewModel> SortOptions => _sortOptions;
 
         [DataSourceProperty]
         public ItemPreviewVM ItemPreview => _itemPreview;
@@ -269,6 +287,12 @@ namespace CompanionGearUpgrades.UI
         public string CurrentItemStringIdLabel => $"StringId: {CurrentItemStringId}";
 
         [DataSourceProperty]
+        public string CurrentItemDisplayName => TruncatePreviewName(CurrentItemName);
+
+        [DataSourceProperty]
+        public HintViewModel CurrentItemNameHint => CreateNameHint(CurrentItemName);
+
+        [DataSourceProperty]
         public string SelectedCandidateName
         {
             get
@@ -280,6 +304,12 @@ namespace CompanionGearUpgrades.UI
 
         [DataSourceProperty]
         public string SelectedCandidateStringId => string.IsNullOrEmpty(_selectedCandidateId) ? "" : _selectedCandidateId;
+
+        [DataSourceProperty]
+        public string SelectedCandidateDisplayName => TruncatePreviewName(SelectedCandidateName);
+
+        [DataSourceProperty]
+        public HintViewModel SelectedCandidateNameHint => CreateNameHint(SelectedCandidateName);
 
         public void SetClanScreenVisible(bool visible)
         {
@@ -456,6 +486,19 @@ namespace CompanionGearUpgrades.UI
             RefreshItemInspection();
         }
 
+        private void SelectSort(GearItemSortOptionViewModel option)
+        {
+            _itemSortOrder = option.SortOrder;
+            SetSelectedSortOption();
+            RebuildVisibleItems();
+        }
+
+        private void SetSelectedSortOption()
+        {
+            foreach (GearItemSortOptionViewModel sortOption in _sortOptions)
+                sortOption.SetSelected(sortOption.SortOrder == _itemSortOrder);
+        }
+
         private void BuildFilters()
         {
             _filters.Clear();
@@ -484,7 +527,7 @@ namespace CompanionGearUpgrades.UI
 
         private void RebuildVisibleItems()
         {
-            _items.Clear();
+            List<GearItemOptionViewModel> visibleItems = new List<GearItemOptionViewModel>();
             foreach (GearItemOptionViewModel item in _allItems)
             {
                 if (!string.IsNullOrEmpty(_selectedItemTypeFilter) &&
@@ -496,11 +539,31 @@ namespace CompanionGearUpgrades.UI
                     item.ItemId.IndexOf(_itemSearchText, StringComparison.OrdinalIgnoreCase) < 0)
                     continue;
 
-                _items.Add(item);
+                visibleItems.Add(item);
             }
+
+            visibleItems.Sort(CompareVisibleItems);
+            _items.Clear();
+            foreach (GearItemOptionViewModel item in visibleItems)
+                _items.Add(item);
 
             OnPropertyChanged(nameof(ItemCountText));
             OnPropertyChanged(nameof(HasVisibleItems));
+        }
+
+        private int CompareVisibleItems(GearItemOptionViewModel left, GearItemOptionViewModel right)
+        {
+            int comparison = left.ItemValue.CompareTo(right.ItemValue);
+            if (_itemSortOrder == GearItemSortOrder.ValueDescending)
+                comparison = -comparison;
+
+            if (comparison != 0)
+                return comparison;
+
+            comparison = string.Compare(left.ItemName, right.ItemName, StringComparison.OrdinalIgnoreCase);
+            return comparison != 0
+                ? comparison
+                : string.Compare(left.ItemId, right.ItemId, StringComparison.Ordinal);
         }
 
         private void SetPage(Page page)
@@ -527,12 +590,16 @@ namespace CompanionGearUpgrades.UI
             OnPropertyChanged(nameof(CurrentItemName));
             OnPropertyChanged(nameof(CurrentItemStringId));
             OnPropertyChanged(nameof(CurrentItemStringIdLabel));
+            OnPropertyChanged(nameof(CurrentItemDisplayName));
+            OnPropertyChanged(nameof(CurrentItemNameHint));
         }
 
         private void NotifyCandidateChanged()
         {
             OnPropertyChanged(nameof(SelectedCandidateName));
             OnPropertyChanged(nameof(SelectedCandidateStringId));
+            OnPropertyChanged(nameof(SelectedCandidateDisplayName));
+            OnPropertyChanged(nameof(SelectedCandidateNameHint));
         }
 
         private void RefreshSlotLabels()
@@ -749,6 +816,20 @@ namespace CompanionGearUpgrades.UI
             }
         }
 
+        private static string TruncatePreviewName(string name)
+        {
+            const int maximumLength = 28;
+            if (string.IsNullOrEmpty(name) || name.Length <= maximumLength)
+                return name;
+
+            return name.Substring(0, maximumLength - 3) + "...";
+        }
+
+        private static HintViewModel CreateNameHint(string name)
+        {
+            return new HintViewModel(new TextObject(name ?? string.Empty), null);
+        }
+
         private static IEnumerable<EquipmentIndex> GetSlotsForCategory(GearPresetCategory category)
         {
             switch (category)
@@ -942,6 +1023,48 @@ namespace CompanionGearUpgrades.UI
         }
     }
 
+    public sealed class GearItemSortOptionViewModel : ViewModel
+    {
+        private readonly Action<GearItemSortOptionViewModel> _onSelected;
+        private bool _isSelected;
+
+        public GearItemSortOptionViewModel(GearItemSortOrder sortOrder, string name, Action<GearItemSortOptionViewModel> onSelected)
+        {
+            SortOrder = sortOrder;
+            Name = name;
+            _onSelected = onSelected;
+        }
+
+        public GearItemSortOrder SortOrder { get; private set; }
+
+        [DataSourceProperty]
+        public string Name { get; private set; }
+
+        [DataSourceProperty]
+        public bool IsSelected
+        {
+            get { return _isSelected; }
+            private set
+            {
+                if (_isSelected == value)
+                    return;
+
+                _isSelected = value;
+                OnPropertyChanged(nameof(IsSelected));
+            }
+        }
+
+        public void ExecuteSelect()
+        {
+            _onSelected?.Invoke(this);
+        }
+
+        public void SetSelected(bool selected)
+        {
+            IsSelected = selected;
+        }
+    }
+
     public sealed class GearItemOptionViewModel : ViewModel
     {
         private readonly Action<GearItemOptionViewModel> _onSelected;
@@ -959,6 +1082,7 @@ namespace CompanionGearUpgrades.UI
             ItemId = item.StringId;
             ItemName = item.Name.ToString();
             ItemTypeName = item.ItemType.ToString();
+            ItemValue = item.Value;
             _onSelected = onSelected;
             _onHoverBegin = onHoverBegin;
             _onHoverEnd = onHoverEnd;
@@ -969,6 +1093,8 @@ namespace CompanionGearUpgrades.UI
 
         public string ItemTypeName { get; private set; }
 
+        public int ItemValue { get; private set; }
+
         [DataSourceProperty]
         public ItemImageIdentifierVM ImageIdentifier { get; private set; }
 
@@ -977,6 +1103,9 @@ namespace CompanionGearUpgrades.UI
 
         [DataSourceProperty]
         public string ItemName { get; private set; }
+
+        [DataSourceProperty]
+        public string ItemValueText => ItemValue.ToString() + " gold";
 
         [DataSourceProperty]
         public string DisplayText => $"{ItemName}  [{ItemId}]";

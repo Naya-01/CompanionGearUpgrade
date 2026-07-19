@@ -238,6 +238,7 @@
     <Compile Include="UI\GearPresetConfigViewModel.cs" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="GUI\Prefabs\EquipmentConfigWindow.xml" />
     <Content Include="SubModule.xml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
@@ -248,6 +249,7 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
+  <ItemGroup />
   <Target Name="CopyGauntletLayoutToModule" AfterTargets="Build">
     <MakeDir Directories="$(OutputPath)..\..;$(OutputPath)..\..\GUI;$(OutputPath)..\..\GUI\PrefabExtensions;$(OutputPath)..\..\GUI\Prefabs" />
     <Copy SourceFiles="$(ProjectDir)SubModule.xml" DestinationFiles="$(OutputPath)..\..\SubModule.xml" SkipUnchangedFiles="true" />
