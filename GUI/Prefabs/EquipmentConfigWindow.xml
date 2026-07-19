@@ -182,56 +182,70 @@
 									<Children>
 										<ListPanel WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" StackLayout.LayoutMethod="HorizontalLeftToRight">
 											<Children>
-												<BrushWidget WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent" SuggestedWidth="600" MarginRight="12" Brush="Frame1.Broken.Left">
+										<BrushWidget WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent" SuggestedWidth="650" MarginRight="12" Brush="Frame1.Broken.Left">
+											<Children>
+												<BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="64" Brush="Inventory.TopLeft.Background">
 													<Children>
-														<BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="56" Brush="Inventory.TopLeft.Background">
+														<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" MarginLeft="28" MarginRight="170" Text="EQUIPMENT CATALOG" VerticalAlignment="Center" Brush="InventoryHeaderFontBrush" Brush.FontSize="24" />
+														<TextWidget WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent" SuggestedWidth="150" HorizontalAlignment="Right" MarginRight="24" Text="@ItemCountText" VerticalAlignment="Center" Brush="InventoryDefaultFontBrush" Brush.FontSize="15" Brush.TextHorizontalAlignment="Right" />
+													</Children>
+												</BrushWidget>
+												<ListPanel WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" MarginLeft="12" MarginRight="18" MarginTop="72" MarginBottom="14" StackLayout.LayoutMethod="VerticalTopToBottom">
 															<Children>
-																<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" MarginLeft="26" Text="Compatible items" VerticalAlignment="Center" Brush="InventoryHeaderFontBrush" Brush.FontSize="22" />
+														<ButtonWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="64" Brush="SaveLoad.Search.Button" UpdateChildrenStates="true">
+															<Children>
+																<TextWidget WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent" SuggestedWidth="112" MarginLeft="14" Text="SEARCH" VerticalAlignment="Center" Brush="InventoryHeaderFontBrush" Brush.FontSize="16" DoNotAcceptEvents="true" />
+																<EditableTextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" MarginTop="10" MarginBottom="10" MarginLeft="116" MarginRight="14" Brush="SaveLoad.Search.InputText" DefaultSearchText="@SearchPlaceholderText" Text="@ItemSearchText" UpdateChildrenStates="true" />
 															</Children>
-														</BrushWidget>
-														<ListPanel WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" MarginLeft="10" MarginRight="16" MarginTop="62" MarginBottom="12" StackLayout.LayoutMethod="VerticalTopToBottom">
+														</ButtonWidget>
+														<ListPanel WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" MarginTop="10" StackLayout.LayoutMethod="HorizontalLeftToRight">
 															<Children>
-																<ScrollablePanel WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="44" ClipRect="FilterClip" InnerPanel="FilterClip\FilterList" HorizontalScrollbar="FilterScrollbar" AutoHideScrollBars="true" OnlyAcceptScrollEventIfCanScroll="true">
+																<BrushWidget WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent" SuggestedWidth="174" MarginRight="10" Brush="Inventory.Tooltip.Background">
 																	<Children>
-																		<Widget Id="FilterClip" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" ClipContents="true">
+																		<Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="36" Sprite="BlankWhiteSquare_9" Color="#141820FF" AlphaFactor="0.92" DoNotAcceptEvents="true" />
+																		<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="36" MarginLeft="12" MarginRight="12" Text="FILTER BY TYPE" VerticalAlignment="Center" Brush="InventoryHeaderFontBrush" Brush.FontSize="15" Brush.TextHorizontalAlignment="Center" DoNotAcceptEvents="true" />
+																		<ScrollablePanel WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" MarginLeft="8" MarginRight="12" MarginTop="42" MarginBottom="8" ClipRect="FilterClip" InnerPanel="FilterClip\FilterList" VerticalScrollbar="FilterScrollbar" AutoHideScrollBars="true" OnlyAcceptScrollEventIfCanScroll="true">
 																			<Children>
-																				<ListPanel Id="FilterList" DataSource="{FilterOptions}" WidthSizePolicy="CoverChildren" HeightSizePolicy="StretchToParent" StackLayout.LayoutMethod="HorizontalLeftToRight">
+																				<Widget Id="FilterClip" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" ClipContents="true">
+																					<Children>
+																						<ListPanel Id="FilterList" DataSource="{FilterOptions}" WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren" StackLayout.LayoutMethod="VerticalTopToBottom">
+																							<ItemTemplate>
+																								<ButtonWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="50" MarginTop="3" MarginBottom="3" Brush="Header.Tab.Center" ButtonType="Radio" IsSelected="@IsSelected" DominantSelectedState="true" Command.Click="ExecuteSelect" DoNotPassEventsToChildren="true" UpdateChildrenStates="true">
+																									<Children>
+																										<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" MarginLeft="8" MarginRight="8" Text="@Name" HorizontalAlignment="Center" VerticalAlignment="Center" Brush="Clan.TabControl.Text" Brush.FontSize="16" Brush.TextHorizontalAlignment="Center" DoNotAcceptEvents="true" />
+																										<Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="4" VerticalAlignment="Bottom" Sprite="BlankWhiteSquare_9" Color="#E0BC62FF" IsVisible="@IsSelected" DoNotAcceptEvents="true" />
+																									</Children>
+																								</ButtonWidget>
+																							</ItemTemplate>
+																						</ListPanel>
+																					</Children>
+																				</Widget>
+																				<ScrollbarWidget Id="FilterScrollbar" WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent" SuggestedWidth="7" HorizontalAlignment="Right" AlignmentAxis="Vertical" Handle="FilterScrollbarHandle" MaxValue="100" MinValue="0">
+																					<Children>
+																						<ImageWidget Id="FilterScrollbarHandle" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="7" SuggestedHeight="30" HorizontalAlignment="Center" Brush="FaceGen.Scrollbar.Handle" />
+																					</Children>
+																				</ScrollbarWidget>
+																			</Children>
+																		</ScrollablePanel>
+																	</Children>
+																</BrushWidget>
+																<Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent">
+																	<Children>
+																		<BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="74" Brush="Inventory.Tooltip.Background">
+																			<Children>
+																				<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="28" MarginLeft="12" Text="SORT RESULTS" VerticalAlignment="Center" Brush="InventoryHeaderFontBrush" Brush.FontSize="14" DoNotAcceptEvents="true" />
+																				<ListPanel DataSource="{SortOptions}" WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="38" MarginLeft="8" MarginRight="8" MarginTop="30" StackLayout.LayoutMethod="HorizontalLeftToRight">
 																					<ItemTemplate>
-																						<ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="124" SuggestedHeight="36" MarginLeft="2" MarginRight="2" MarginTop="3" MarginBottom="3" Brush="Inventory.SidePanel.TypeSort.Left" ButtonType="Radio" IsSelected="@IsSelected" Command.Click="ExecuteSelect" Command.HoverBegin="ExecuteHoverBegin" Command.HoverEnd="ExecuteHoverEnd" DoNotPassEventsToChildren="true" UpdateChildrenStates="true">
+																						<ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="208" SuggestedHeight="36" MarginRight="4" Brush="Inventory.SidePanel.ValueSort.Left" ButtonType="Radio" IsSelected="@IsSelected" DominantSelectedState="true" Command.Click="ExecuteSelect" DoNotPassEventsToChildren="true" UpdateChildrenStates="true">
 																							<Children>
-																								<BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Brush="Inventory.SidePanel.TypeSort.Left" IsVisible="@IsHovered" AlphaFactor="0.6" DoNotAcceptEvents="true" />
-																								<BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Brush="Inventory.Tooltip.WeaponAlternativeUsageButton" IsVisible="@IsSelected" AlphaFactor="0.8" DoNotAcceptEvents="true" />
-																								<Widget WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent" SuggestedWidth="6" HorizontalAlignment="Left" Sprite="BlankWhiteSquare_9" Color="#E0BC62FF" IsVisible="@IsSelected" DoNotAcceptEvents="true" />
-																								<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Text="@Name" HorizontalAlignment="Center" VerticalAlignment="Center" Brush="InventoryDefaultFontBrush" Brush.FontSize="14" Brush.TextHorizontalAlignment="Center" DoNotAcceptEvents="true" />
+																								<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Text="@Name" HorizontalAlignment="Center" VerticalAlignment="Center" Brush="InventoryDefaultFontBrush" Brush.FontSize="13" Brush.TextHorizontalAlignment="Center" DoNotAcceptEvents="true" />
 																							</Children>
 																						</ButtonWidget>
 																					</ItemTemplate>
 																				</ListPanel>
 																			</Children>
-																		</Widget>
-																		<ScrollbarWidget Id="FilterScrollbar" WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="5" VerticalAlignment="Bottom" AlignmentAxis="Horizontal" Handle="FilterScrollbarHandle" MaxValue="100" MinValue="0">
-																			<Children>
-																				<ImageWidget Id="FilterScrollbarHandle" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="24" SuggestedHeight="5" VerticalAlignment="Center" Brush="FaceGen.Scrollbar.Handle" />
-																			</Children>
-																		</ScrollbarWidget>
-																	</Children>
-																</ScrollablePanel>
-																<ButtonWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="44" MarginTop="6" Brush="SaveLoad.Search.Button" UpdateChildrenStates="true">
-																	<Children>
-																		<EditableTextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" MarginTop="8" MarginBottom="8" MarginLeft="10" MarginRight="10" Brush="SaveLoad.Search.InputText" DefaultSearchText="@SearchPlaceholderText" Text="@ItemSearchText" UpdateChildrenStates="true" />
-																	</Children>
-																</ButtonWidget>
-																<ListPanel DataSource="{SortOptions}" WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="40" MarginTop="6" StackLayout.LayoutMethod="HorizontalLeftToRight">
-																	<ItemTemplate>
-																		<ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="210" SuggestedHeight="36" MarginRight="4" Brush="Inventory.SidePanel.ValueSort.Left" ButtonType="Radio" IsSelected="@IsSelected" Command.Click="ExecuteSelect" DoNotPassEventsToChildren="true" UpdateChildrenStates="true">
-																			<Children>
-																				<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Text="@Name" HorizontalAlignment="Center" VerticalAlignment="Center" Brush="InventoryDefaultFontBrush" Brush.FontSize="14" Brush.TextHorizontalAlignment="Center" DoNotAcceptEvents="true" />
-																			</Children>
-																		</ButtonWidget>
-																	</ItemTemplate>
-																</ListPanel>
-																<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="24" MarginTop="2" Text="@ItemCountText" HorizontalAlignment="Right" Brush="InventoryDefaultFontBrush" Brush.FontSize="15" Brush.TextHorizontalAlignment="Right" />
-																<Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent">
+																		</BrushWidget>
+																		<Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" MarginTop="82">
 																	<Children>
 																		<ScrollablePanel WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" ClipRect="ItemClip" InnerPanel="ItemClip\ItemList" VerticalScrollbar="ItemScrollbar" AutoHideScrollBars="true">
 																			<Children>
@@ -239,26 +253,36 @@
 																					<Children>
 																						<ListPanel Id="ItemList" DataSource="{ItemOptions}" WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren" StackLayout.LayoutMethod="VerticalTopToBottom">
 																							<ItemTemplate>
-																								<ButtonWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="56" MarginTop="3" MarginBottom="3" Brush="Inventory.Tuple.Left" ButtonType="Radio" IsSelected="@IsSelected" Command.Click="ExecuteHighlight" Command.HoverBegin="ExecuteHoverBegin" Command.HoverEnd="ExecuteHoverEnd" DoNotPassEventsToChildren="true" UpdateChildrenStates="true">
-																									<Children>
-																										<BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Brush="Inventory.Tuple.Left" IsVisible="@IsHovered" AlphaFactor="0.65" DoNotAcceptEvents="true" />
-																										<BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Brush="Inventory.Tooltip.WeaponAlternativeUsageButton" IsVisible="@IsSelected" AlphaFactor="0.7" DoNotAcceptEvents="true" />
-																										<Widget WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent" SuggestedWidth="8" HorizontalAlignment="Left" Sprite="BlankWhiteSquare_9" Color="#E0BC62FF" IsVisible="@IsSelected" DoNotAcceptEvents="true" />
-																										<InventoryImageIdentifierWidget DataSource="{ImageIdentifier}" DoNotAcceptEvents="true" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="111" SuggestedHeight="51" MarginLeft="41" MarginTop="2" ImageId="@Id" TextureProviderName="@TextureProviderName" AdditionalArgs="@AdditionalArgs" LoadingIconWidget="LoadingIconWidget">
-																											<Children>
-																												<Widget DoNotAcceptEvents="true" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="Inventory\tuple_shadow" AlphaFactor="0.7" />
-																												<Standard.CircleLoadingWidget HorizontalAlignment="Center" VerticalAlignment="Center" Id="LoadingIconWidget" />
-																											</Children>
-																										</InventoryImageIdentifierWidget>
-																										<TextWidget Text="@ItemName" DoNotAcceptEvents="true" WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent" SuggestedWidth="270" MarginLeft="160" MarginRight="104" VerticalAlignment="Center" PositionYOffset="2" Brush="InventoryDefaultFontBrush" Brush.FontSize="17" ClipContents="true" />
-																										<ListPanel DoNotAcceptEvents="true" WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent" SuggestedWidth="96" HorizontalAlignment="Right" MarginRight="10" StackLayout.LayoutMethod="HorizontalRightToLeft">
-																											<Children>
-																												<Widget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="20" SuggestedHeight="20" VerticalAlignment="Center" Sprite="Inventory\icon_gold" DoNotAcceptEvents="true" />
-																												<TextWidget IntText="@ItemValue" WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent" SuggestedWidth="72" VerticalAlignment="Center" PositionYOffset="2" Brush="InventoryItemCostFont" Brush.FontSize="16" Brush.TextHorizontalAlignment="Right" DoNotAcceptEvents="true" />
-																											</Children>
-																										</ListPanel>
-																									</Children>
-																								</ButtonWidget>
+																							<ButtonWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="88" MarginTop="3" MarginBottom="5" Brush="Popup.SelectionElement.Tuple" ButtonType="Radio" IsSelected="@IsSelected" DominantSelectedState="true" Command.Click="ExecuteHighlight" Command.HoverBegin="ExecuteHoverBegin" Command.HoverEnd="ExecuteHoverEnd" DoNotPassEventsToChildren="true" UpdateChildrenStates="true">
+																								<Children>
+																									<Widget WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent" SuggestedWidth="9" HorizontalAlignment="Left" Sprite="BlankWhiteSquare_9" Color="#E0BC62FF" IsVisible="@IsSelected" DoNotAcceptEvents="true" />
+																									<Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="4" VerticalAlignment="Bottom" Sprite="BlankWhiteSquare_9" Color="#E0BC62FF" IsVisible="@IsSelected" DoNotAcceptEvents="true" />
+																									<Widget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="108" SuggestedHeight="72" MarginLeft="14" VerticalAlignment="Center" Sprite="StdAssets\Popup\tuple_portrait_slot" DoNotAcceptEvents="true">
+																										<Children>
+																											<InventoryImageIdentifierWidget DataSource="{ImageIdentifier}" DoNotAcceptEvents="true" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="102" SuggestedHeight="66" HorizontalAlignment="Center" VerticalAlignment="Center" ImageId="@Id" TextureProviderName="@TextureProviderName" AdditionalArgs="@AdditionalArgs" LoadingIconWidget="LoadingIconWidget">
+																												<Children>
+																													<Widget DoNotAcceptEvents="true" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Sprite="Inventory\tuple_shadow" AlphaFactor="0.65" />
+																													<Standard.CircleLoadingWidget HorizontalAlignment="Center" VerticalAlignment="Center" Id="LoadingIconWidget" />
+																												</Children>
+																											</InventoryImageIdentifierWidget>
+																										</Children>
+																									</Widget>
+																									<ListPanel WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" MarginLeft="132" MarginRight="122" MarginTop="10" MarginBottom="8" StackLayout.LayoutMethod="VerticalTopToBottom" DoNotAcceptEvents="true">
+																										<Children>
+																											<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="30" Text="@ItemName" VerticalAlignment="Center" Brush="InventoryDefaultFontBrush" Brush.FontSize="18" ClipContents="true" DoNotAcceptEvents="true" />
+																											<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="20" Text="@ItemId" VerticalAlignment="Center" Brush="InventoryDefaultFontBrush" Brush.FontSize="12" AlphaFactor="0.72" ClipContents="true" DoNotAcceptEvents="true" />
+																											<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="18" Text="@ItemTypeName" VerticalAlignment="Center" Brush="InventoryDefaultFontBrush" Brush.FontSize="12" AlphaFactor="0.82" ClipContents="true" DoNotAcceptEvents="true" />
+																										</Children>
+																									</ListPanel>
+																									<TextWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="106" SuggestedHeight="18" HorizontalAlignment="Right" VerticalAlignment="Top" MarginTop="5" MarginRight="12" Text="SELECTED" IsVisible="@IsSelected" Brush="InventoryItemCostFont" Brush.FontSize="12" Brush.TextHorizontalAlignment="Center" DoNotAcceptEvents="true" />
+																									<BrushWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="106" SuggestedHeight="36" HorizontalAlignment="Right" VerticalAlignment="Bottom" MarginRight="12" MarginBottom="10" Brush="Inventory.Tooltip.WeaponAlternativeUsageButton" DoNotAcceptEvents="true">
+																										<Children>
+																											<Widget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="18" SuggestedHeight="18" MarginLeft="10" VerticalAlignment="Center" Sprite="Inventory\icon_gold" DoNotAcceptEvents="true" />
+																											<TextWidget IntText="@ItemValue" WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent" SuggestedWidth="70" HorizontalAlignment="Right" MarginRight="8" VerticalAlignment="Center" Brush="InventoryItemCostFont" Brush.FontSize="15" Brush.TextHorizontalAlignment="Right" DoNotAcceptEvents="true" />
+																										</Children>
+																									</BrushWidget>
+																								</Children>
+																							</ButtonWidget>
 																							</ItemTemplate>
 																						</ListPanel>
 																					</Children>
@@ -271,14 +295,18 @@
 																			</Children>
 																		</ScrollablePanel>
 																		<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" IsHidden="@HasVisibleItems" Text="No compatible item matches this filter." HorizontalAlignment="Center" VerticalAlignment="Center" Brush="InventoryDefaultFontBrush" Brush.FontSize="17" Brush.TextHorizontalAlignment="Center" />
-																	</Children>
-																</Widget>
-															</Children>
-														</ListPanel>
+																										</Children>
+																									</Widget>
+																						</Children>
+																					</Widget>
+																				</Children>
+																			</ListPanel>
+																		</Children>
+																	</ListPanel>
 													</Children>
 												</BrushWidget>
 
-												<BrushWidget WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent" SuggestedWidth="470" MarginRight="12" Brush="Inventory.Tooltip.Background">
+										<BrushWidget WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent" SuggestedWidth="420" MarginRight="12" Brush="Inventory.Tooltip.Background">
 													<Children>
 														<ListPanel WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" MarginLeft="20" MarginRight="20" MarginTop="20" MarginBottom="76" StackLayout.LayoutMethod="VerticalTopToBottom">
 															<Children>
@@ -334,17 +362,21 @@
 																<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="28" MarginTop="4" Text="Hover an item to inspect it" HorizontalAlignment="Center" Brush="InventoryDefaultFontBrush" Brush.FontSize="16" Brush.TextHorizontalAlignment="Center" IsHidden="@HasInspectionItem" />
 																<Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" MarginTop="6" IsVisible="@HasInspectionItem">
 																	<Children>
-																		<ListPanel DataSource="{InspectionTooltip}" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" IsVisible="@HasSingleInspection" StackLayout.LayoutMethod="VerticalTopToBottom">
-																			<Children>
-																				<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="34" Text="@ItemName" HorizontalAlignment="Center" Brush="InventoryDefaultFontBrush" Brush.FontSize="22" Brush.TextHorizontalAlignment="Center" />
-																				<Widget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="155" SuggestedHeight="81" HorizontalAlignment="Center" MarginTop="4" Sprite="Inventory\portrait_cart">
-																					<Children>
-																						<ImageIdentifierWidget DataSource="{ImageIdentifier}" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" MarginTop="2" MarginBottom="2" MarginLeft="2" MarginRight="2" ImageId="@Id" TextureProviderName="@TextureProviderName" AdditionalArgs="@AdditionalArgs" />
-																					</Children>
-																				</Widget>
-																				<InventoryTooltipInnerContent Parameter.PropertiesDataSource="{Properties}" MarginTop="8" />
-																			</Children>
-																		</ListPanel>
+															<Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" IsVisible="@HasSingleInspection">
+																<Children>
+																	<ListPanel DataSource="{InspectionTooltip}" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" StackLayout.LayoutMethod="VerticalTopToBottom">
+																		<Children>
+																			<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="34" Text="@ItemName" HorizontalAlignment="Center" Brush="InventoryDefaultFontBrush" Brush.FontSize="22" Brush.TextHorizontalAlignment="Center" />
+																			<Widget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="155" SuggestedHeight="81" HorizontalAlignment="Center" MarginTop="4" Sprite="Inventory\portrait_cart">
+																				<Children>
+																					<ImageIdentifierWidget DataSource="{ImageIdentifier}" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" MarginTop="2" MarginBottom="2" MarginLeft="2" MarginRight="2" ImageId="@Id" TextureProviderName="@TextureProviderName" AdditionalArgs="@AdditionalArgs" />
+																				</Children>
+																			</Widget>
+																			<InventoryTooltipInnerContent Parameter.PropertiesDataSource="{Properties}" MarginTop="8" />
+																		</Children>
+																	</ListPanel>
+																</Children>
+															</Widget>
 																		<ListPanel WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" IsVisible="@HasHoveredComparison" StackLayout.LayoutMethod="HorizontalLeftToRight">
 																			<Children>
 																				<ListPanel DataSource="{InspectionTooltip}" WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent" SuggestedWidth="210" MarginRight="4" StackLayout.LayoutMethod="VerticalTopToBottom">
