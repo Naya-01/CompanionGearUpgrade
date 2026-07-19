@@ -35,7 +35,7 @@ namespace CompanionGearUpgrades
 
         public override void OnGameEnd(Game game)
         {
-            CompanionGearUpgradeBehavior.ClearClanPresetConfiguration();
+            CompanionGearUpgradeBehavior.ClearPresetConfiguration();
 
             base.OnGameEnd(game);
         }

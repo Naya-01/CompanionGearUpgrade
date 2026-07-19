@@ -1,5 +1,4 @@
 using CompanionGearUpgrades.Data;
-using CompanionGearUpgrades.Dialog;
 using CompanionGearUpgrades.Domain;
 using CompanionGearUpgrades.Services;
 using System;
@@ -30,8 +29,8 @@ namespace CompanionGearUpgrades.UI
     }
 
     /// <summary>
-    /// Gauntlet state for Clan > Equipment. The working snapshot is created
-    /// when a role/tier is selected and is committed only by ExecuteSave.
+    /// Shared Gauntlet state for preset configuration. The working snapshot
+    /// is created when a role/tier is selected and committed only by Save.
     /// </summary>
     public sealed class GearPresetConfigViewModel : ViewModel
     {
@@ -87,7 +86,7 @@ namespace CompanionGearUpgrades.UI
         private GearItemOptionViewModel _hoveredCandidate;
         private Page _page;
         private bool _isWindowOpen;
-        private bool _isClanScreenVisible;
+        private bool _isHostScreenVisible;
         private string _statusText;
 
         // Open only after the direct ItemTableauWidget has materialized its
@@ -255,26 +254,20 @@ namespace CompanionGearUpgrades.UI
         [DataSourceProperty]
         public bool HasUnsavedChanges => !SnapshotsEqual(_working, _savedSnapshot);
 
-        [DataSourceProperty]
-        public bool IsClanScreenVisible
+        public void SetHostScreenVisible(bool visible)
         {
-            get { return _isClanScreenVisible; }
-            private set
-            {
-                if (_isClanScreenVisible == value)
-                    return;
+            if (_isHostScreenVisible == visible)
+                return;
 
-                _isClanScreenVisible = value;
-                OnPropertyChanged(nameof(IsClanScreenVisible));
-                if (!value && IsWindowOpen)
+            _isHostScreenVisible = visible;
+            if (!visible && IsWindowOpen)
+            {
+                bool discardedChanges = HasUnsavedChanges;
+                CloseWithoutSaving();
+                if (discardedChanges)
                 {
-                    bool discardedChanges = HasUnsavedChanges;
-                    CloseWithoutSaving();
-                    if (discardedChanges)
-                    {
-                        InformationManager.DisplayMessage(new InformationMessage(
-                            "[CGU] The configuration was closed and unsaved changes were discarded."));
-                    }
+                    InformationManager.DisplayMessage(new InformationMessage(
+                        "[CGU] The configuration was closed and unsaved changes were discarded."));
                 }
             }
         }
@@ -389,14 +382,6 @@ namespace CompanionGearUpgrades.UI
         [DataSourceProperty]
         public HintViewModel ExitHint => CreateNameHint("Close the configuration. You will be warned before unsaved changes are discarded.");
 
-        [DataSourceProperty]
-        public HintViewModel CancelHint => ExitHint;
-
-        public void SetClanScreenVisible(bool visible)
-        {
-            IsClanScreenVisible = visible;
-        }
-
         public void ExecuteOpenConfiguration()
         {
             PreparePreviewSession();
@@ -465,11 +450,6 @@ namespace CompanionGearUpgrades.UI
             StatusText = "Changes saved to the campaign overrides.";
         }
 
-        public void ExecuteCancel()
-        {
-            ExecuteExit();
-        }
-
         public void ExecuteExit()
         {
             if (!HasUnsavedChanges)
@@ -532,7 +512,7 @@ namespace CompanionGearUpgrades.UI
 
         public void ExecuteResetTierToDefault()
         {
-            GearPresetSnapshot defaultSnapshot = GearPresetConfigUi.CreateDefaultTierSnapshot(_service, _role, _tier);
+            GearPresetSnapshot defaultSnapshot = CreateDefaultTierSnapshot(_service, _role, _tier);
             if (defaultSnapshot == null)
             {
                 StatusText = "The selected preset is not available.";
@@ -562,7 +542,7 @@ namespace CompanionGearUpgrades.UI
                 text =>
                 {
                     GearPresetSnapshot updatedSnapshot;
-                    if (!GearPresetConfigUi.TrySetSnapshotPrice(_working, text, out updatedSnapshot))
+                    if (!TrySetSnapshotPrice(_working, text, out updatedSnapshot))
                     {
                         StatusText = "Invalid price. Enter a non-negative whole number.";
                         return;
@@ -605,7 +585,7 @@ namespace CompanionGearUpgrades.UI
         private void ApplyCalculatedTierPrice(int calculatedPrice)
         {
             GearPresetSnapshot updatedSnapshot;
-            if (!GearPresetConfigUi.TrySetSnapshotPrice(_working, calculatedPrice.ToString(), out updatedSnapshot))
+            if (!TrySetSnapshotPrice(_working, calculatedPrice.ToString(), out updatedSnapshot))
             {
                 StatusText = "Calculated price is invalid.";
                 return;
@@ -654,6 +634,33 @@ namespace CompanionGearUpgrades.UI
             }
 
             calculatedPrice = (int)total;
+            return true;
+        }
+
+        private static GearPresetSnapshot CreateDefaultTierSnapshot(
+            CompanionGearUpgradeService service,
+            GearRole role,
+            int tier)
+        {
+            GearPreset defaultPreset = service != null ? service.GetDefaultPresetOrNull(role, tier) : null;
+            return defaultPreset == null
+                ? null
+                : new GearPresetSnapshot(
+                    defaultPreset.Cost,
+                    new Dictionary<EquipmentIndex, string>(defaultPreset.Slots));
+        }
+
+        private static bool TrySetSnapshotPrice(
+            GearPresetSnapshot snapshot,
+            string text,
+            out GearPresetSnapshot updatedSnapshot)
+        {
+            updatedSnapshot = snapshot;
+            int value;
+            if (snapshot == null || !int.TryParse(text, out value) || value < 0)
+                return false;
+
+            updatedSnapshot = new GearPresetSnapshot(value, snapshot.Slots);
             return true;
         }
 

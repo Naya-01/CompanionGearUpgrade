@@ -13,7 +13,7 @@ namespace CompanionGearUpgrades.Behaviors
         private Dictionary<string, int> _costOverrides;
         private Dictionary<string, string> _itemOverrides;
         private CompanionGearUpgradeDialog _dialog;
-        private static EquipmentConfigView _clanConfigView;
+        private static EquipmentConfigView _equipmentConfigView;
 
         public CompanionGearUpgradeBehavior()
         {
@@ -43,29 +43,37 @@ namespace CompanionGearUpgrades.Behaviors
             var overrides = new GearPresetOverrides(_costOverrides, _itemOverrides);
 
             var service = new CompanionGearUpgradeService(defaults, overrides);
-            _dialog = new CompanionGearUpgradeDialog(service, overrides);
+            _dialog = new CompanionGearUpgradeDialog(service);
             _dialog.AddDialogs(starter);
 
-            // Clan and conversation configuration share these exact instances.
-            // The Clan path is a Gauntlet layer and never opens InventoryScreen.
-            _clanConfigView = new EquipmentConfigView(service, overrides);
-            _clanConfigView.Initialize();
+            // Clan and conversation configuration share this exact Gauntlet
+            // view, service and persisted override store.
+            _equipmentConfigView = new EquipmentConfigView(service, overrides);
+            _equipmentConfigView.Initialize();
         }
 
         public static bool TryOpenClanPresetConfiguration()
         {
-            if (_clanConfigView == null)
+            if (_equipmentConfigView == null)
                 return false;
 
-            return EquipmentConfigView.OpenConfiguration();
+            return EquipmentConfigView.OpenClanConfiguration();
         }
 
-        public static void ClearClanPresetConfiguration()
+        public static bool TryOpenConversationPresetConfiguration()
         {
-            if (_clanConfigView != null)
+            if (_equipmentConfigView == null)
+                return false;
+
+            return EquipmentConfigView.OpenConversationConfiguration();
+        }
+
+        public static void ClearPresetConfiguration()
+        {
+            if (_equipmentConfigView != null)
             {
-                _clanConfigView.Dispose();
-                _clanConfigView = null;
+                _equipmentConfigView.Dispose();
+                _equipmentConfigView = null;
             }
         }
     }

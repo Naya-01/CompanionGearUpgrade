@@ -225,7 +225,6 @@
     <Compile Include="Data\GearPresetOverrides.cs" />
     <Compile Include="Data\GearPresetRepository.cs" />
     <Compile Include="Dialog\CompanionGearUpgradeDialog.cs" />
-    <Compile Include="Dialog\GearPresetConfigUi.cs" />
     <Compile Include="Domain\GearPreset.cs" />
     <Compile Include="Domain\GearRole.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
@@ -233,7 +232,6 @@
     <Compile Include="SubModule.cs" />
     <Compile Include="UI\ClanEquipmentTabExtension.cs" />
     <Compile Include="UI\ClanEquipmentTabHarmonyPatch.cs" />
-    <Compile Include="UI\ClanManagementViewModelMixin.cs" />
     <Compile Include="UI\EquipmentConfigView.cs" />
     <Compile Include="UI\GearPresetConfigViewModel.cs" />
   </ItemGroup>

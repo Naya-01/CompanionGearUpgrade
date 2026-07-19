@@ -2,6 +2,8 @@ using CompanionGearUpgrades.Data;
 using CompanionGearUpgrades.Services;
 using SandBox.GauntletUI;
 using System;
+using TaleWorlds.CampaignSystem;
+using TaleWorlds.Core;
 using TaleWorlds.Engine.GauntletUI;
 using TaleWorlds.GauntletUI.BaseTypes;
 using TaleWorlds.Library;
@@ -11,12 +13,19 @@ using TaleWorlds.ScreenSystem;
 namespace CompanionGearUpgrades.UI
 {
     /// <summary>
-    /// Hosts the preset editor as a modal Gauntlet layer while the Clan screen
-    /// is active. The editor itself never touches a hero or an inventory.
+    /// Hosts one shared preset editor as a modal Gauntlet layer from either
+    /// Clan > Equipment or a companion conversation.
     /// </summary>
     public sealed class EquipmentConfigView
     {
-        private const string LayerName = "CompanionGearUpgradeClanEquipment";
+        private enum ConfigurationHost
+        {
+            None,
+            Clan,
+            Conversation
+        }
+
+        private const string LayerName = "CompanionGearUpgradeEquipmentConfig";
         private static EquipmentConfigView _current;
 
         private readonly CompanionGearUpgradeService _service;
@@ -26,8 +35,13 @@ namespace CompanionGearUpgrades.UI
         private GauntletLayer _layer;
         private GauntletMovieIdentifier _movie;
         private GearPresetConfigViewModel _viewModel;
-        private bool _isClanScreen;
+        private ConfigurationHost _host;
+        private ScreenBase _hostScreen;
+        private bool _isHostScreenVisible;
+        private bool _isLayerModal;
         private bool _releaseMovieOnNextTick;
+        private bool _openConversationOnNextTick;
+        private ScreenBase _pendingConversationScreen;
 
         public EquipmentConfigView(CompanionGearUpgradeService service, GearPresetOverrides overrides)
         {
@@ -47,13 +61,16 @@ namespace CompanionGearUpgrades.UI
             ScreenManager.OnPushScreen += OnPushScreen;
             ScreenManager.OnPopScreen += OnPopScreen;
             ScreenManager.AddGlobalLayer(_globalLayer, false);
-            UpdateScreenVisibility(ScreenManager.TopScreen);
         }
 
         public void Dispose()
         {
             ScreenManager.OnPushScreen -= OnPushScreen;
             ScreenManager.OnPopScreen -= OnPopScreen;
+
+            _openConversationOnNextTick = false;
+            _pendingConversationScreen = null;
+            SetLayerInteraction(false);
 
             if (_globalLayer != null)
                 ScreenManager.RemoveGlobalLayer(_globalLayer);
@@ -67,68 +84,121 @@ namespace CompanionGearUpgrades.UI
                 _current = null;
         }
 
-        public static bool OpenConfiguration()
+        public static bool OpenClanConfiguration()
         {
-            return _current != null && _current.OpenConfigurationInternal();
+            return _current != null && _current.OpenClanConfigurationInternal();
         }
 
-        private bool OpenConfigurationInternal()
+        public static bool OpenConversationConfiguration()
         {
-            _isClanScreen = IsClanScreen(ScreenManager.TopScreen);
-            if (!_isClanScreen || _layer == null)
+            return _current != null && _current.QueueConversationConfiguration();
+        }
+
+        private bool OpenClanConfigurationInternal()
+        {
+            ScreenBase screen = ScreenManager.TopScreen;
+            if (!IsClanScreen(screen))
+                return false;
+
+            return OpenConfigurationInternal(ConfigurationHost.Clan, screen);
+        }
+
+        private bool QueueConversationConfiguration()
+        {
+            ScreenBase screen = ScreenManager.TopScreen;
+            if (_layer == null || screen == null || !IsConversationInProgress())
+                return false;
+
+            // The dialogue consequence is still running here. Loading on the
+            // next global-layer tick lets Bannerlord finish DoOptionContinue
+            // before this layer takes focus.
+            _pendingConversationScreen = screen;
+            _openConversationOnNextTick = true;
+            return true;
+        }
+
+        private bool OpenConfigurationInternal(ConfigurationHost host, ScreenBase hostScreen)
+        {
+            if (_layer == null || !IsHostValid(host, hostScreen, ScreenManager.TopScreen))
                 return false;
 
             if (_releaseMovieOnNextTick)
                 ReleaseConfigurationMovie();
 
-            if (_viewModel == null)
+            _host = host;
+            _hostScreen = hostScreen;
+            _isHostScreenVisible = true;
+
+            GearPresetConfigViewModel createdViewModel = null;
+            GauntletMovieIdentifier createdMovie = null;
+            try
             {
-                GearPresetConfigViewModel viewModel =
-                    new GearPresetConfigViewModel(_service, _overrides, SetWindowLayerState);
-                GauntletMovieIdentifier movie = null;
+                if (_viewModel == null)
+                {
+                    createdViewModel =
+                        new GearPresetConfigViewModel(_service, _overrides, SetWindowLayerState);
+                    createdMovie = _layer.LoadMovie("EquipmentConfigWindow", createdViewModel);
+                    _viewModel = createdViewModel;
+                    _movie = createdMovie;
+                }
+
+                _viewModel.SetHostScreenVisible(true);
+                _viewModel.ExecuteOpenConfiguration();
+                return true;
+            }
+            catch
+            {
+                GearPresetConfigViewModel failedViewModel = _viewModel ?? createdViewModel;
+                GauntletMovieIdentifier failedMovie = _movie ?? createdMovie;
+                _viewModel = null;
+                _movie = null;
+                _releaseMovieOnNextTick = false;
+                SetLayerInteraction(false);
+                ResetHost();
+
                 try
                 {
-                    movie = _layer.LoadMovie("EquipmentConfigWindow", viewModel);
-                    _viewModel = viewModel;
-                    _movie = movie;
-                    _viewModel.SetClanScreenVisible(true);
+                    failedViewModel?.OnFinalize();
                 }
                 catch
                 {
-                    viewModel.OnFinalize();
-                    if (movie != null)
-                        _layer.ReleaseMovie(movie);
-                    return false;
                 }
-            }
 
-            _viewModel.ExecuteOpenConfiguration();
-            return true;
+                try
+                {
+                    if (_layer != null && failedMovie != null)
+                        _layer.ReleaseMovie(failedMovie);
+                }
+                catch
+                {
+                }
+
+                return false;
+            }
         }
 
         private void OnPushScreen(ScreenBase screen)
         {
-            UpdateScreenVisibility(screen);
+            UpdateHostVisibility(screen);
         }
 
         private void OnPopScreen(ScreenBase screen)
         {
-            UpdateScreenVisibility(ScreenManager.TopScreen);
+            UpdateHostVisibility(ScreenManager.TopScreen);
         }
 
-        private void UpdateScreenVisibility(ScreenBase screen)
+        private void UpdateHostVisibility(ScreenBase screen)
         {
-            _isClanScreen = IsClanScreen(screen);
+            if (_host == ConfigurationHost.None)
+                return;
+
+            _isHostScreenVisible = IsHostValid(_host, _hostScreen, screen);
 
             if (_viewModel != null)
-                _viewModel.SetClanScreenVisible(_isClanScreen);
+                _viewModel.SetHostScreenVisible(_isHostScreenVisible);
 
-            if (_layer != null)
-            {
-                bool isModal = _isClanScreen && _viewModel != null && _viewModel.IsWindowOpen;
-                _layer.IsFocusLayer = isModal;
-                _layer.InputRestrictions.SetInputRestrictions(isModal, InputUsageMask.All);
-            }
+            bool isModal = _isHostScreenVisible && _viewModel != null && _viewModel.IsWindowOpen;
+            SetLayerInteraction(isModal);
         }
 
         private static bool IsClanScreen(ScreenBase screen)
@@ -141,19 +211,72 @@ namespace CompanionGearUpgrades.UI
             return screen is GauntletClanScreen;
         }
 
+        private static bool IsConversationInProgress()
+        {
+            return Campaign.Current != null &&
+                Campaign.Current.ConversationManager != null &&
+                Campaign.Current.ConversationManager.IsConversationInProgress;
+        }
+
+        private static bool IsHostValid(
+            ConfigurationHost host,
+            ScreenBase expectedScreen,
+            ScreenBase currentScreen)
+        {
+            if (expectedScreen == null || !ReferenceEquals(expectedScreen, currentScreen))
+                return false;
+
+            if (host == ConfigurationHost.Clan)
+                return IsClanScreen(currentScreen);
+
+            return host == ConfigurationHost.Conversation && IsConversationInProgress();
+        }
+
         private void SetWindowLayerState(bool isOpen)
         {
-            if (_layer == null)
+            bool isModal = _isHostScreenVisible && isOpen;
+            SetLayerInteraction(isModal);
+            _releaseMovieOnNextTick = !isOpen && _movie != null;
+        }
+
+        private void SetLayerInteraction(bool isModal)
+        {
+            if (_layer == null || _isLayerModal == isModal)
                 return;
 
-            bool isModal = _isClanScreen && isOpen;
-            _layer.IsFocusLayer = isModal;
-            _layer.InputRestrictions.SetInputRestrictions(isModal, InputUsageMask.All);
-            _releaseMovieOnNextTick = !isOpen && _movie != null;
+            _isLayerModal = isModal;
+            if (isModal)
+            {
+                _layer.InputRestrictions.SetInputRestrictions(true, InputUsageMask.All);
+                _layer.IsFocusLayer = true;
+                ScreenManager.TrySetFocus(_layer);
+            }
+            else
+            {
+                _layer.IsFocusLayer = false;
+                _layer.InputRestrictions.ResetInputRestrictions();
+                ScreenManager.TryLoseFocus(_layer);
+            }
         }
 
         private void OnGauntletTick()
         {
+            if (_openConversationOnNextTick)
+            {
+                ScreenBase conversationScreen = _pendingConversationScreen;
+                _openConversationOnNextTick = false;
+                _pendingConversationScreen = null;
+
+                if (!OpenConfigurationInternal(ConfigurationHost.Conversation, conversationScreen))
+                {
+                    InformationManager.DisplayMessage(new InformationMessage(
+                        "[CGU] Preset configuration could not be opened."));
+                }
+            }
+
+            if (_host != ConfigurationHost.None)
+                UpdateHostVisibility(ScreenManager.TopScreen);
+
             if (_releaseMovieOnNextTick)
             {
                 ReleaseConfigurationMovie();
@@ -188,11 +311,13 @@ namespace CompanionGearUpgrades.UI
         private void ReleaseConfigurationMovie()
         {
             _releaseMovieOnNextTick = false;
+            SetLayerInteraction(false);
 
             GearPresetConfigViewModel viewModel = _viewModel;
             GauntletMovieIdentifier movie = _movie;
             _viewModel = null;
             _movie = null;
+            ResetHost();
 
             try
             {
@@ -203,6 +328,13 @@ namespace CompanionGearUpgrades.UI
                 if (_layer != null && movie != null)
                     _layer.ReleaseMovie(movie);
             }
+        }
+
+        private void ResetHost()
+        {
+            _host = ConfigurationHost.None;
+            _hostScreen = null;
+            _isHostScreenVisible = false;
         }
 
         private sealed class EquipmentGlobalLayer : GlobalLayer

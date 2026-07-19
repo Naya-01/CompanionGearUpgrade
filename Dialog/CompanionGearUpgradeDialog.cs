@@ -1,25 +1,29 @@
-﻿using CompanionGearUpgrades.Data;
+﻿using CompanionGearUpgrades.Behaviors;
 using CompanionGearUpgrades.Domain;
 using CompanionGearUpgrades.Services;
 using TaleWorlds.CampaignSystem;
+using TaleWorlds.Core;
+using TaleWorlds.Library;
 
 namespace CompanionGearUpgrades.Dialog
 {
     public sealed class CompanionGearUpgradeDialog
     {
         private readonly CompanionGearUpgradeService _service;
-        private readonly GearPresetConfigUi _configUi;
         private GearRole _selectedRole;
 
-        public CompanionGearUpgradeDialog(CompanionGearUpgradeService service, GearPresetOverrides overrides)
+        public CompanionGearUpgradeDialog(CompanionGearUpgradeService service)
         {
             _service = service;
-            _configUi = new GearPresetConfigUi(service, overrides, ReturnToConversationRoot);
         }
 
-        private void ReturnToConversationRoot()
+        private static void OpenPresetConfiguration()
         {
-            Campaign.Current.ConversationManager.ContinueConversation();
+            if (!CompanionGearUpgradeBehavior.TryOpenConversationPresetConfiguration())
+            {
+                InformationManager.DisplayMessage(new InformationMessage(
+                    "[CGU] Preset configuration is not ready yet."));
+            }
         }
 
         private bool IsTalkingToPlayerCompanion()
@@ -47,7 +51,7 @@ namespace CompanionGearUpgrades.Dialog
                 "cgu_back_main_npc",
                 "{=cgu_config_open}Configure upgrade presets",
                 IsTalkingToPlayerCompanion,
-                () => _configUi.Open(),
+                OpenPresetConfiguration,
                 99);
 
             // 2) NPC asks the question -> choice menu (player options)
