@@ -1,15 +1,30 @@
 ﻿using CompanionGearUpgrades.Behaviors;
-using CompanionGearUpgrades.Domain;
+using CompanionGearUpgrades.Data;
 using CompanionGearUpgrades.Services;
 using TaleWorlds.CampaignSystem;
 using TaleWorlds.Library;
+using TaleWorlds.Localization;
 
 namespace CompanionGearUpgrades.Dialog
 {
     public sealed class CompanionGearUpgradeDialog
     {
+        // Dialogues are registered only once when the campaign starts. Reserve
+        // the seven possible custom-role entries up front, then decide whether
+        // each entry is visible from the current persisted role catalog.
+        private static readonly string[] CustomRoleTextVariables =
+        {
+            "CGU_CUSTOM_ROLE_1",
+            "CGU_CUSTOM_ROLE_2",
+            "CGU_CUSTOM_ROLE_3",
+            "CGU_CUSTOM_ROLE_4",
+            "CGU_CUSTOM_ROLE_5",
+            "CGU_CUSTOM_ROLE_6",
+            "CGU_CUSTOM_ROLE_7"
+        };
+
         private readonly CompanionGearUpgradeService _service;
-        private GearRole _selectedRole;
+        private string _selectedRoleId;
 
         public CompanionGearUpgradeDialog(CompanionGearUpgradeService service)
         {
@@ -29,6 +44,48 @@ namespace CompanionGearUpgrades.Dialog
         {
             Hero h = Hero.OneToOneConversationHero;
             return h != null && (h.IsPlayerCompanion || h.Clan == Clan.PlayerClan);
+        }
+
+        private GearRoleDefinition GetCustomRoleForDialogSlot(int slotIndex)
+        {
+            if (slotIndex < 0)
+                return null;
+
+            int customRoleIndex = 0;
+            foreach (GearRoleDefinition role in _service.GetRoleDefinitions())
+            {
+                if (role == null ||
+                    role.IsDefaultRole ||
+                    string.IsNullOrWhiteSpace(role.Id) ||
+                    string.IsNullOrWhiteSpace(role.Name))
+                {
+                    continue;
+                }
+
+                if (customRoleIndex == slotIndex)
+                    return role;
+
+                customRoleIndex++;
+            }
+
+            return null;
+        }
+
+        private bool CanShowCustomRoleDialogSlot(int slotIndex, string textVariable)
+        {
+            GearRoleDefinition role = GetCustomRoleForDialogSlot(slotIndex);
+            if (role == null)
+                return false;
+
+            MBTextManager.SetTextVariable(textVariable, role.Name);
+            return true;
+        }
+
+        private void SelectCustomRoleDialogSlot(int slotIndex)
+        {
+            GearRoleDefinition role = GetCustomRoleForDialogSlot(slotIndex);
+            if (role != null)
+                _selectedRoleId = role.Id;
         }
 
         public void AddDialogs(CampaignGameStarter starter)
@@ -69,7 +126,7 @@ namespace CompanionGearUpgrades.Dialog
                 "cgu_tier_npc",
                 "{=cgu_role_infantry}Soldier (infantry)",
                 () => true,
-                () => _selectedRole = GearRole.Infantry);
+                () => _selectedRoleId = "Infantry");
 
             starter.AddPlayerLine(
                 "cgu_role_archer",
@@ -77,7 +134,7 @@ namespace CompanionGearUpgrades.Dialog
                 "cgu_tier_npc",
                 "{=cgu_role_archer}Archer",
                 () => true,
-                () => _selectedRole = GearRole.Archer);
+                () => _selectedRoleId = "Archer");
 
             starter.AddPlayerLine(
                 "cgu_role_lancer",
@@ -85,7 +142,23 @@ namespace CompanionGearUpgrades.Dialog
                 "cgu_tier_npc",
                 "{=cgu_role_lancer}Lancer (cavalry)",
                 () => true,
-                () => _selectedRole = GearRole.Lancer);
+                () => _selectedRoleId = "Lancer");
+
+            for (int customRoleSlot = 0; customRoleSlot < CustomRoleTextVariables.Length; customRoleSlot++)
+            {
+                int slotIndex = customRoleSlot;
+                string textVariable = CustomRoleTextVariables[slotIndex];
+
+                // Static ASCII IDs avoid registering user input as a dialogue
+                // identifier while the role name itself remains fully dynamic.
+                starter.AddPlayerLine(
+                    "cgu_role_custom_" + (slotIndex + 1),
+                    "cgu_role_player",
+                    "cgu_tier_npc",
+                    "{" + textVariable + "}",
+                    () => CanShowCustomRoleDialogSlot(slotIndex, textVariable),
+                    () => SelectCustomRoleDialogSlot(slotIndex));
+            }
 
             // Back from the role menu -> go through an NPC state -> hero_main_options
             starter.AddPlayerLine(
@@ -119,24 +192,24 @@ namespace CompanionGearUpgrades.Dialog
                "cgu_tier_player",
                "cgu_apply_npc",
                "{=cgu_t1}Tier 1 ({COST_T1} gold)",
-               () => _service.SetTierCostVar(_selectedRole, 1, "COST_T1"),
-               () => _service.TryApplyTier(_selectedRole, 1));
+               () => _service.SetTierCostVar(_selectedRoleId, 1, "COST_T1"),
+               () => _service.TryApplyTier(_selectedRoleId, 1));
 
             starter.AddPlayerLine(
                 "cgu_tier_2",
                 "cgu_tier_player",
                 "cgu_apply_npc",
                 "{=cgu_t2}Tier 2 ({COST_T2} gold)",
-                () => _service.SetTierCostVar(_selectedRole, 2, "COST_T2"),
-                () => _service.TryApplyTier(_selectedRole, 2));
+                () => _service.SetTierCostVar(_selectedRoleId, 2, "COST_T2"),
+                () => _service.TryApplyTier(_selectedRoleId, 2));
 
             starter.AddPlayerLine(
                 "cgu_tier_3",
                 "cgu_tier_player",
                 "cgu_apply_npc",
                 "{=cgu_t3}Tier 3 ({COST_T3} gold)",
-                () => _service.SetTierCostVar(_selectedRole, 3, "COST_T3"),
-                () => _service.TryApplyTier(_selectedRole, 3));
+                () => _service.SetTierCostVar(_selectedRoleId, 3, "COST_T3"),
+                () => _service.TryApplyTier(_selectedRoleId, 3));
 
             // NPC "ack" after applying -> return to the main menu
             starter.AddDialogLine(

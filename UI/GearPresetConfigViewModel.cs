@@ -32,6 +32,8 @@ namespace CompanionGearUpgrades.UI
         private readonly Action<bool> _windowStateChanged;
 
         private readonly MBBindingList<GearRoleOptionViewModel> _roles;
+        private readonly List<GearRoleDefinition> _customRoles;
+        private List<GearRoleDefinition> _savedCustomRoles;
         private readonly MBBindingList<GearTierOptionViewModel> _tiers;
         private readonly MBBindingList<GearCategoryOptionViewModel> _categories;
         private readonly MBBindingList<GearSlotOptionViewModel> _slots;
@@ -44,13 +46,13 @@ namespace CompanionGearUpgrades.UI
         private readonly GearItemTooltipViewModel _configuredTooltip;
         private ItemObject _inspectedItem;
 
-        private GearRole _role;
+        private string _role;
         private int _tier;
         private GearPresetCategory _category;
         private EquipmentIndex _slot;
         private GearPresetSnapshot _working;
         private GearPresetSnapshot _savedSnapshot;
-        private GearRole _workingRole;
+        private string _workingRole;
         private int _workingTier;
         private string _selectedCandidateId;
         private string _selectedItemTypeFilter;
@@ -89,6 +91,8 @@ namespace CompanionGearUpgrades.UI
             _windowStateChanged = windowStateChanged;
 
             _roles = new MBBindingList<GearRoleOptionViewModel>();
+            _customRoles = new List<GearRoleDefinition>();
+            _savedCustomRoles = new List<GearRoleDefinition>();
             _tiers = new MBBindingList<GearTierOptionViewModel>();
             _categories = new MBBindingList<GearCategoryOptionViewModel>();
             _slots = new MBBindingList<GearSlotOptionViewModel>();
@@ -104,9 +108,7 @@ namespace CompanionGearUpgrades.UI
             _statusText = "Select a role and tier to edit a preset.";
             _page = Page.Roles;
 
-            _roles.Add(new GearRoleOptionViewModel(GearRole.Infantry, "Infantry", SelectRole));
-            _roles.Add(new GearRoleOptionViewModel(GearRole.Archer, "Archer", SelectRole));
-            _roles.Add(new GearRoleOptionViewModel(GearRole.Lancer, "Lancer", SelectRole));
+            ReloadStagedRoles();
             _sortOptions.Add(new GearItemSortOptionViewModel(GearItemSortOrder.ValueAscending, "Price: low to high", SelectSort));
             _sortOptions.Add(new GearItemSortOptionViewModel(GearItemSortOrder.ValueDescending, "Price: high to low", SelectSort));
             SetSelectedSortOption();
@@ -114,6 +116,21 @@ namespace CompanionGearUpgrades.UI
 
         [DataSourceProperty]
         public MBBindingList<GearRoleOptionViewModel> RoleOptions => _roles;
+
+        [DataSourceProperty]
+        public string RoleCountText => $"{_roles.Count} / {GearPresetRepository.MaxRoleCount} roles";
+
+        [DataSourceProperty]
+        public bool CanAddRole => _roles.Count < GearPresetRepository.MaxRoleCount;
+
+        [DataSourceProperty]
+        public bool IsAddRoleDisabled => !CanAddRole;
+
+        [DataSourceProperty]
+        public HintViewModel AddRoleHint => CreateNameHint(
+            CanAddRole
+                ? "Create a custom role with three upgrade tiers."
+                : "You can configure at most 10 roles, including Archer, Infantry, and Lancer.");
 
         [DataSourceProperty]
         public MBBindingList<GearTierOptionViewModel> TierOptions => _tiers;
@@ -203,6 +220,8 @@ namespace CompanionGearUpgrades.UI
                 OnPropertyChanged(nameof(IsCategorySelectionVisible));
                 OnPropertyChanged(nameof(IsSlotSelectionVisible));
                 OnPropertyChanged(nameof(IsItemSelectionVisible));
+                OnPropertyChanged(nameof(IsSaveCancelVisible));
+                OnPropertyChanged(nameof(IsBackVisible));
                 _windowStateChanged?.Invoke(value);
             }
         }
@@ -222,7 +241,19 @@ namespace CompanionGearUpgrades.UI
         [DataSourceProperty]
         public bool IsItemSelectionVisible => IsWindowOpen && _page == Page.Items;
 
-        private bool HasUnsavedChanges => !SnapshotsEqual(_working, _savedSnapshot);
+        [DataSourceProperty]
+        public bool IsSaveCancelVisible => IsWindowOpen &&
+            (_page == Page.Roles || _page == Page.Categories);
+
+        [DataSourceProperty]
+        public bool IsBackVisible => IsWindowOpen &&
+            (_page == Page.Tiers || _page == Page.Categories || _page == Page.Slots || _page == Page.Items);
+
+        private bool HasUnsavedTierChanges => !SnapshotsEqual(_working, _savedSnapshot);
+
+        private bool HasUnsavedRoleChanges => !RoleDefinitionsEqual(_customRoles, _savedCustomRoles);
+
+        private bool HasUnsavedChanges => HasUnsavedTierChanges || HasUnsavedRoleChanges;
 
         public void SetHostScreenVisible(bool visible)
         {
@@ -253,12 +284,12 @@ namespace CompanionGearUpgrades.UI
                 if (_page == Page.Roles)
                     return "Choose a role";
                 if (_page == Page.Tiers)
-                    return $"{_role} > Choose a tier";
+                    return $"{GetRoleDisplayName(_role)} > Choose a tier";
                 if (_page == Page.Categories)
-                    return $"{_role} > Tier {_tier} > Choose a category";
+                    return $"{GetRoleDisplayName(_role)} > Tier {_tier} > Choose a category";
                 if (_page == Page.Slots)
-                    return $"{_role} > Tier {_tier} > {_category} > Choose a slot";
-                return $"{_role} > Tier {_tier} > {_category} > {GetSlotName(_slot)}";
+                    return $"{GetRoleDisplayName(_role)} > Tier {_tier} > {_category} > Choose a slot";
+                return $"{GetRoleDisplayName(_role)} > Tier {_tier} > {_category} > {GetSlotName(_slot)}";
             }
         }
 
@@ -344,24 +375,73 @@ namespace CompanionGearUpgrades.UI
         public HintViewModel CalculateTierPriceHint => CreateNameHint("Calculate a price from the equipment currently configured for this tier.");
 
         [DataSourceProperty]
-        public HintViewModel SaveHint => CreateNameHint("Save all temporary changes to the campaign without closing the configuration.");
+        public HintViewModel SaveHint => CreateNameHint("Save all temporary role and tier changes, then close the configuration.");
 
         [DataSourceProperty]
-        public HintViewModel ExitHint => CreateNameHint("Close the configuration. You will be warned before unsaved changes are discarded.");
+        public HintViewModel ExitHint => CreateNameHint("Cancel and discard all temporary role and tier changes.");
 
         public void ExecuteOpenConfiguration()
         {
             PreparePreviewSession();
+            _role = null;
             _working = null;
             _savedSnapshot = null;
+            _workingRole = null;
+            _workingTier = 0;
+            _tier = 0;
             _selectedCandidateId = null;
             ClearItemInspection();
-            foreach (GearRoleOptionViewModel roleOption in _roles)
-                roleOption.SetSelected(false);
+            ReloadStagedRoles();
             _page = Page.Roles;
             StatusText = "Select a role and tier to edit a preset.";
             NotifyPageChanged();
             IsWindowOpen = true;
+        }
+
+        public void ExecuteAddRole()
+        {
+            if (!CanAddRole)
+            {
+                StatusText = "The 10 role limit has been reached.";
+                return;
+            }
+
+            InformationManager.ShowTextInquiry(new TextInquiryData(
+                "CGU - Add role",
+                "Enter a unique name for the new role:",
+                true,
+                true,
+                "Add role",
+                "Cancel",
+                CreateCustomRoleDraft,
+                () => StatusText = "Role creation cancelled."
+            ));
+        }
+
+        public void ExecuteDeleteRole(GearRoleOptionViewModel option)
+        {
+            if (option == null || !option.IsCustomRole)
+            {
+                StatusText = "Archer, Infantry, and Lancer are default roles and cannot be deleted.";
+                return;
+            }
+
+            if (!ContainsCustomRole(option.RoleId))
+            {
+                StatusText = "This role is no longer available.";
+                return;
+            }
+
+            InformationManager.ShowInquiry(new InquiryData(
+                "CGU - Delete role",
+                $"Delete the custom role '{option.Name}'? Its three tiers and all saved configuration for this role will be removed when you save.",
+                true,
+                true,
+                "Delete",
+                "Keep role",
+                () => DeleteCustomRoleDraft(option),
+                () => StatusText = "Role deletion cancelled."
+            ));
         }
 
         public void ExecuteBack()
@@ -388,30 +468,44 @@ namespace CompanionGearUpgrades.UI
 
         public void ExecuteSave()
         {
-            if (_working == null)
+            GearPreset defaultPreset = null;
+            if (HasUnsavedTierChanges)
             {
-                StatusText = "Select a role and tier before saving.";
+                if (string.IsNullOrEmpty(_workingRole) || !ContainsStagedRole(_workingRole))
+                {
+                    StatusText = "The edited role no longer exists.";
+                    return;
+                }
+
+                defaultPreset = _service.GetDefaultPresetOrNull(_workingRole, _workingTier);
+                if (defaultPreset == null)
+                {
+                    StatusText = "The selected preset is not available.";
+                    return;
+                }
+            }
+
+            string error;
+            if (HasUnsavedRoleChanges && !_service.TryCommitCustomRoles(_customRoles, out error))
+            {
+                StatusText = string.IsNullOrEmpty(error) ? "The custom roles could not be saved." : error;
                 return;
             }
 
-            GearRole role = _workingRole;
-            int tier = _workingTier;
-            GearPreset defaultPreset = _service.GetDefaultPresetOrNull(role, tier);
-            if (defaultPreset == null)
+            if (HasUnsavedTierChanges)
             {
-                StatusText = "The selected preset is not available.";
-                return;
+                _overrides.CommitSnapshot(_workingRole, _workingTier, defaultPreset, _working);
+                _savedSnapshot = _working.Clone();
+                foreach (GearTierOptionViewModel tierOption in _tiers)
+                {
+                    if (tierOption.Tier == _workingTier)
+                        tierOption.SetCost(_working.Cost);
+                }
             }
 
-            _overrides.CommitSnapshot(role, tier, defaultPreset, _working);
-            _savedSnapshot = _working.Clone();
-            foreach (GearTierOptionViewModel tierOption in _tiers)
-            {
-                if (tierOption.Tier == tier)
-                    tierOption.SetCost(_working.Cost);
-            }
-
-            StatusText = "Changes saved to the campaign overrides.";
+            _savedCustomRoles = new List<GearRoleDefinition>(_customRoles);
+            InformationManager.DisplayMessage(new InformationMessage("[CGU] Preset configuration saved."));
+            CloseWithoutSaving();
         }
 
         public void ExecuteExit()
@@ -424,11 +518,11 @@ namespace CompanionGearUpgrades.UI
 
             StatusText = "Unsaved changes are still pending.";
             InformationManager.ShowInquiry(new InquiryData(
-                "CGU - Unsaved changes",
-                "You have unsaved changes. Exit and discard them?",
+                "CGU - Cancel configuration",
+                "You have unsaved role or tier changes. Cancel and discard them?",
                 true,
                 true,
-                "Exit without saving",
+                "Discard changes",
                 "Keep editing",
                 () =>
                 {
@@ -595,9 +689,9 @@ namespace CompanionGearUpgrades.UI
             return true;
         }
 
-        private GearPresetSnapshot CreateDefaultTierSnapshot(GearRole role, int tier)
+        private GearPresetSnapshot CreateDefaultTierSnapshot(string roleId, int tier)
         {
-            GearPreset defaultPreset = _service.GetDefaultPresetOrNull(role, tier);
+            GearPreset defaultPreset = _service.GetDefaultPresetOrNull(roleId, tier);
             return defaultPreset == null
                 ? null
                 : new GearPresetSnapshot(

@@ -17,27 +17,57 @@
 							<Children>
 								<Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" IsVisible="@IsRoleSelectionVisible">
 									<Children>
-										<BrushWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="1040" SuggestedHeight="360" HorizontalAlignment="Center" VerticalAlignment="Center" Brush="Inventory.Tooltip.Background">
+										<BrushWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="1040" SuggestedHeight="560" HorizontalAlignment="Center" VerticalAlignment="Center" Brush="Inventory.Tooltip.Background">
 											<Children>
 												<BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="72" HorizontalAlignment="Center" VerticalAlignment="Top" Brush="Inventory.TopLeft.Background">
 													<Children>
 														<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="38" MarginTop="8" Text="SELECT A ROLE" HorizontalAlignment="Center" VerticalAlignment="Center" Brush="InventoryHeaderFontBrush" Brush.FontSize="24" Brush.TextHorizontalAlignment="Center" />
-														<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="24" MarginTop="42" Text="Choose the preset family you want to configure" HorizontalAlignment="Center" VerticalAlignment="Center" Brush="InventoryDefaultFontBrush" Brush.FontSize="15" Brush.TextHorizontalAlignment="Center" />
+														<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="24" MarginTop="42" Text="Choose the preset family you want to configure. Each role keeps three upgrade tiers." HorizontalAlignment="Center" VerticalAlignment="Center" Brush="InventoryDefaultFontBrush" Brush.FontSize="15" Brush.TextHorizontalAlignment="Center" />
 													</Children>
 												</BrushWidget>
-												<ListPanel Id="RoleList" DataSource="{RoleOptions}" WidthSizePolicy="CoverChildren" HeightSizePolicy="Fixed" SuggestedHeight="154" HorizontalAlignment="Center" VerticalAlignment="Center" MarginTop="42" StackLayout.LayoutMethod="HorizontalLeftToRight">
-													<ItemTemplate>
-														<ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="306" SuggestedHeight="140" MarginLeft="8" MarginRight="8" Brush="Popup.SelectionElement.Tuple" ButtonType="Radio" IsSelected="@IsSelected" DominantSelectedState="true" Command.Click="ExecuteSelect" DoNotPassEventsToChildren="true" UpdateChildrenStates="true">
+												<Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="48" MarginLeft="24" MarginRight="24" MarginTop="80">
+													<Children>
+														<ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="186" SuggestedHeight="42" VerticalAlignment="Center" Brush="Popup.Done.Button.NineGrid" Command.Click="ExecuteAddRole" IsEnabled="@CanAddRole" DoNotPassEventsToChildren="true" UpdateChildrenStates="true">
 															<Children>
-																<Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="5" VerticalAlignment="Bottom" Sprite="BlankWhiteSquare_9" Color="#E0BC62FF" IsVisible="@IsSelected" DoNotAcceptEvents="true" />
-																<TextWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="82" SuggestedHeight="18" HorizontalAlignment="Right" VerticalAlignment="Top" MarginTop="7" MarginRight="10" Text="SELECTED" IsVisible="@IsSelected" Brush="InventoryItemCostFont" Brush.FontSize="11" Brush.TextHorizontalAlignment="Center" DoNotAcceptEvents="true" />
-																<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="28" MarginBottom="8" Text="ROLE PRESET" HorizontalAlignment="Center" VerticalAlignment="Center" Brush="InventoryDefaultFontBrush" Brush.FontSize="14" Brush.TextHorizontalAlignment="Center" AlphaFactor="0.72" DoNotAcceptEvents="true" />
-																<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="52" MarginTop="48" MarginLeft="24" MarginRight="48" Text="@Name" HorizontalAlignment="Center" VerticalAlignment="Center" Brush="InventoryHeaderFontBrush" Brush.FontSize="26" Brush.TextHorizontalAlignment="Center" ClipContents="true" DoNotAcceptEvents="true" />
-																<Widget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="22" SuggestedHeight="22" HorizontalAlignment="Right" VerticalAlignment="Center" MarginRight="22" Sprite="StdAssets\arrow_little" DoNotAcceptEvents="true" />
+																<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Text="Add role" HorizontalAlignment="Center" VerticalAlignment="Center" Brush="Popup.Button.Text" Brush.FontSize="16" Brush.TextHorizontalAlignment="Center" />
+																<HintWidget DataSource="{AddRoleHint}" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Command.HoverBegin="ExecuteBeginHint" Command.HoverEnd="ExecuteEndHint" IsDisabled="true" />
 															</Children>
 														</ButtonWidget>
-													</ItemTemplate>
-												</ListPanel>
+														<TextWidget WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent" SuggestedWidth="180" HorizontalAlignment="Right" VerticalAlignment="Center" Text="@RoleCountText" Brush="InventoryItemCostFont" Brush.FontSize="17" Brush.TextHorizontalAlignment="Right" />
+													</Children>
+												</Widget>
+												<ScrollablePanel WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" MarginLeft="24" MarginRight="34" MarginTop="138" MarginBottom="22" ClipRect="RoleClip" InnerPanel="RoleClip\RoleList" VerticalScrollbar="RoleScrollbar" AutoHideScrollBars="true" OnlyAcceptScrollEventIfCanScroll="true">
+													<Children>
+														<Widget Id="RoleClip" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" ClipContents="true">
+															<Children>
+																<ListPanel Id="RoleList" DataSource="{RoleOptions}" WidthSizePolicy="StretchToParent" HeightSizePolicy="CoverChildren" StackLayout.LayoutMethod="VerticalTopToBottom">
+																	<ItemTemplate>
+																		<ButtonWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="58" MarginBottom="8" Brush="Popup.SelectionElement.Tuple" ButtonType="Radio" IsSelected="@IsSelected" DominantSelectedState="true" Command.Click="ExecuteSelect">
+																			<Children>
+																				<Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="5" VerticalAlignment="Bottom" Sprite="BlankWhiteSquare_9" Color="#E0BC62FF" IsVisible="@IsSelected" DoNotAcceptEvents="true" />
+																				<TextWidget WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent" SuggestedWidth="140" MarginLeft="20" Text="ROLE PRESET" VerticalAlignment="Center" Brush="InventoryDefaultFontBrush" Brush.FontSize="14" AlphaFactor="0.72" DoNotAcceptEvents="true" />
+																				<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" MarginLeft="174" MarginRight="178" Text="@Name" VerticalAlignment="Center" Brush="InventoryHeaderFontBrush" Brush.FontSize="23" ClipContents="true" DoNotAcceptEvents="true" />
+																				<Widget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="22" SuggestedHeight="22" HorizontalAlignment="Right" VerticalAlignment="Center" MarginRight="26" Sprite="StdAssets\arrow_little" IsHidden="@IsCustomRole" DoNotAcceptEvents="true" />
+																				<Widget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="22" SuggestedHeight="22" HorizontalAlignment="Right" VerticalAlignment="Center" MarginRight="148" Sprite="StdAssets\arrow_little" IsVisible="@IsCustomRole" DoNotAcceptEvents="true" />
+																				<ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="116" SuggestedHeight="38" HorizontalAlignment="Right" VerticalAlignment="Center" MarginRight="18" Brush="Popup.Delete.Button" Command.Click="ExecuteDelete" IsVisible="@IsCustomRole" DoNotPassEventsToChildren="true" UpdateChildrenStates="true">
+																					<Children>
+																						<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Text="Delete" HorizontalAlignment="Center" VerticalAlignment="Center" Brush="Popup.Button.Text" Brush.FontSize="15" Brush.TextHorizontalAlignment="Center" />
+																						<HintWidget DataSource="{DeleteRoleHint}" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Command.HoverBegin="ExecuteBeginHint" Command.HoverEnd="ExecuteEndHint" IsDisabled="true" />
+																					</Children>
+																				</ButtonWidget>
+																			</Children>
+																		</ButtonWidget>
+																	</ItemTemplate>
+																</ListPanel>
+															</Children>
+														</Widget>
+														<ScrollbarWidget Id="RoleScrollbar" WidthSizePolicy="Fixed" HeightSizePolicy="StretchToParent" SuggestedWidth="9" HorizontalAlignment="Right" AlignmentAxis="Vertical" Handle="RoleScrollbarHandle" MaxValue="100" MinValue="0">
+															<Children>
+																<ImageWidget Id="RoleScrollbarHandle" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="9" SuggestedHeight="32" HorizontalAlignment="Center" Brush="FaceGen.Scrollbar.Handle" />
+															</Children>
+														</ScrollbarWidget>
+													</Children>
+												</ScrollablePanel>
 											</Children>
 										</BrushWidget>
 									</Children>
@@ -433,22 +463,22 @@
 
 						<BrushWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="58" MarginLeft="24" MarginRight="24" VerticalAlignment="Bottom" MarginBottom="12" Brush="Frame1Brush">
 							<Children>
-								<ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="180" SuggestedHeight="48" HorizontalAlignment="Left" VerticalAlignment="Center" MarginLeft="10" Brush="Popup.Cancel.Button.NineGrid" Command.Click="ExecuteBack" DoNotPassEventsToChildren="true" UpdateChildrenStates="true">
+								<ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="180" SuggestedHeight="48" HorizontalAlignment="Left" VerticalAlignment="Center" MarginLeft="10" Brush="Popup.Cancel.Button.NineGrid" Command.Click="ExecuteBack" DoNotPassEventsToChildren="true" UpdateChildrenStates="true" IsVisible="@IsBackVisible">
 									<Children>
 										<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Text="Back" HorizontalAlignment="Center" VerticalAlignment="Center" Brush="Popup.Button.Text" Brush.FontSize="17" Brush.TextHorizontalAlignment="Center" />
 									</Children>
 								</ButtonWidget>
 								<ListPanel WidthSizePolicy="CoverChildren" HeightSizePolicy="StretchToParent" HorizontalAlignment="Right" MarginRight="10" StackLayout.LayoutMethod="HorizontalLeftToRight">
 									<Children>
-										<ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="180" SuggestedHeight="48" VerticalAlignment="Center" Brush="Popup.Done.Button.NineGrid" Command.Click="ExecuteSave" DoNotPassEventsToChildren="true" UpdateChildrenStates="true" IsVisible="@IsCategorySelectionVisible">
+										<ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="180" SuggestedHeight="48" VerticalAlignment="Center" Brush="Popup.Done.Button.NineGrid" Command.Click="ExecuteSave" DoNotPassEventsToChildren="true" UpdateChildrenStates="true" IsVisible="@IsSaveCancelVisible">
 											<Children>
 												<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Text="Save" HorizontalAlignment="Center" VerticalAlignment="Center" Brush="Popup.Button.Text" Brush.FontSize="17" Brush.TextHorizontalAlignment="Center" />
 												<HintWidget DataSource="{SaveHint}" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Command.HoverBegin="ExecuteBeginHint" Command.HoverEnd="ExecuteEndHint" IsDisabled="true" />
 											</Children>
 										</ButtonWidget>
-										<ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="180" SuggestedHeight="48" VerticalAlignment="Center" MarginLeft="10" Brush="Popup.Cancel.Button.NineGrid" Command.Click="ExecuteExit" DoNotPassEventsToChildren="true" UpdateChildrenStates="true">
+										<ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="180" SuggestedHeight="48" VerticalAlignment="Center" MarginLeft="10" Brush="Popup.Cancel.Button.NineGrid" Command.Click="ExecuteExit" DoNotPassEventsToChildren="true" UpdateChildrenStates="true" IsVisible="@IsSaveCancelVisible">
 											<Children>
-												<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Text="Exit" HorizontalAlignment="Center" VerticalAlignment="Center" Brush="Popup.Button.Text" Brush.FontSize="17" Brush.TextHorizontalAlignment="Center" />
+												<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Text="Cancel" HorizontalAlignment="Center" VerticalAlignment="Center" Brush="Popup.Button.Text" Brush.FontSize="17" Brush.TextHorizontalAlignment="Center" />
 												<HintWidget DataSource="{ExitHint}" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Command.HoverBegin="ExecuteBeginHint" Command.HoverEnd="ExecuteEndHint" IsDisabled="true" />
 											</Children>
 										</ButtonWidget>

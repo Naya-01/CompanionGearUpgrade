@@ -1,11 +1,260 @@
 ﻿using CompanionGearUpgrades.Domain;
+using System;
 using System.Collections.Generic;
 using TaleWorlds.Core;
 
 namespace CompanionGearUpgrades.Data
 {
+    /// <summary>
+    /// Immutable description of a role exposed by the configurator. Only the
+    /// built-in roles are represented by <see cref="GearRole"/>; custom roles
+    /// use a stable string identifier so old enum-based override keys remain
+    /// valid in existing campaign saves.
+    /// </summary>
+    public sealed class GearRoleDefinition
+    {
+        public GearRoleDefinition(string id, string name, bool isDefaultRole)
+        {
+            Id = id;
+            Name = name;
+            IsDefaultRole = isDefaultRole;
+        }
+
+        public string Id { get; private set; }
+        public string Name { get; private set; }
+        public bool IsDefaultRole { get; private set; }
+
+        // Concise alias for Gauntlet-facing callers.
+        public bool IsDefault => IsDefaultRole;
+    }
+
     public static class GearPresetRepository
     {
+        public const int TierCount = 3;
+        public const int MaxRoleCount = 10;
+        public const int DefaultRoleCount = 3;
+
+        internal const string CustomRoleIdPrefix = "custom-";
+
+        private static readonly GearRoleDefinition[] DefaultRoleDefinitions =
+        {
+            new GearRoleDefinition(nameof(GearRole.Archer), "Archer", true),
+            new GearRoleDefinition(nameof(GearRole.Infantry), "Infantry", true),
+            new GearRoleDefinition(nameof(GearRole.Lancer), "Lancer", true)
+        };
+
+        /// <summary>
+        /// Returns a fresh list so the UI can stage changes without mutating
+        /// the campaign-backed custom-role dictionary.
+        /// </summary>
+        public static List<GearRoleDefinition> GetDefaultRoles()
+        {
+            return new List<GearRoleDefinition>(DefaultRoleDefinitions);
+        }
+
+        public static List<GearRoleDefinition> GetRoles(Dictionary<string, string> customRoleNames)
+        {
+            var roles = GetDefaultRoles();
+            roles.AddRange(GetCustomRoles(customRoleNames));
+            return roles;
+        }
+
+        public static List<GearRoleDefinition> GetCustomRoles(Dictionary<string, string> customRoleNames)
+        {
+            var roles = new List<GearRoleDefinition>();
+            if (customRoleNames == null)
+                return roles;
+
+            foreach (KeyValuePair<string, string> pair in customRoleNames)
+            {
+                string normalizedName;
+                string ignoredError;
+                if (!IsCustomRoleId(pair.Key) ||
+                    !TryNormalizeCustomRoleName(pair.Value, out normalizedName, out ignoredError))
+                {
+                    continue;
+                }
+
+                roles.Add(new GearRoleDefinition(pair.Key, normalizedName, false));
+            }
+
+            roles.Sort(CompareCustomRoles);
+            return roles;
+        }
+
+        public static string GetRoleId(GearRole role)
+        {
+            return role.ToString();
+        }
+
+        public static bool TryGetDefaultRole(string roleId, out GearRole role)
+        {
+            if (string.Equals(roleId, nameof(GearRole.Archer), StringComparison.Ordinal))
+            {
+                role = GearRole.Archer;
+                return true;
+            }
+
+            if (string.Equals(roleId, nameof(GearRole.Infantry), StringComparison.Ordinal))
+            {
+                role = GearRole.Infantry;
+                return true;
+            }
+
+            if (string.Equals(roleId, nameof(GearRole.Lancer), StringComparison.Ordinal))
+            {
+                role = GearRole.Lancer;
+                return true;
+            }
+
+            role = default(GearRole);
+            return false;
+        }
+
+        public static bool IsDefaultRoleId(string roleId)
+        {
+            GearRole ignoredRole;
+            return TryGetDefaultRole(roleId, out ignoredRole);
+        }
+
+        public static bool IsCustomRoleId(string roleId)
+        {
+            return !string.IsNullOrEmpty(roleId) &&
+                roleId.StartsWith(CustomRoleIdPrefix, StringComparison.Ordinal) &&
+                roleId.IndexOf(':') < 0;
+        }
+
+        public static bool IsValidTier(int tier)
+        {
+            return tier >= 1 && tier <= TierCount;
+        }
+
+        public static bool TryNormalizeCustomRoleName(string name, out string normalizedName, out string error)
+        {
+            normalizedName = string.IsNullOrWhiteSpace(name) ? null : name.Trim();
+            if (string.IsNullOrEmpty(normalizedName))
+            {
+                error = "A role name is required.";
+                return false;
+            }
+
+            error = null;
+            return true;
+        }
+
+        /// <summary>
+        /// Makes data restored from a campaign save safe to use. It only
+        /// accepts generated custom identifiers, normalizes names, keeps names
+        /// unique (including built-ins), and enforces the ten-role cap.
+        /// </summary>
+        public static void NormalizeCustomRoles(Dictionary<string, string> customRoleNames)
+        {
+            if (customRoleNames == null)
+                return;
+
+            var entries = new List<KeyValuePair<string, string>>(customRoleNames);
+            entries.Sort((left, right) => StringComparer.Ordinal.Compare(left.Key, right.Key));
+
+            var normalized = new Dictionary<string, string>();
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (GearRoleDefinition defaultRole in DefaultRoleDefinitions)
+                names.Add(defaultRole.Name);
+
+            foreach (KeyValuePair<string, string> entry in entries)
+            {
+                if (normalized.Count >= MaxRoleCount - DefaultRoleCount || !IsCustomRoleId(entry.Key))
+                    continue;
+
+                string normalizedName;
+                string ignoredError;
+                if (!TryNormalizeCustomRoleName(entry.Value, out normalizedName, out ignoredError) ||
+                    !names.Add(normalizedName))
+                {
+                    continue;
+                }
+
+                normalized.Add(entry.Key, normalizedName);
+            }
+
+            customRoleNames.Clear();
+            foreach (KeyValuePair<string, string> entry in normalized)
+                customRoleNames.Add(entry.Key, entry.Value);
+        }
+
+        /// <summary>
+        /// Validates the custom part of a staged role list. Defaults are always
+        /// supplied by this repository and cannot be changed through this API.
+        /// </summary>
+        public static bool TryValidateCustomRoles(
+            IEnumerable<GearRoleDefinition> customRoles,
+            out List<GearRoleDefinition> validatedRoles,
+            out string error)
+        {
+            validatedRoles = new List<GearRoleDefinition>();
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (GearRoleDefinition defaultRole in DefaultRoleDefinitions)
+                names.Add(defaultRole.Name);
+
+            if (customRoles == null)
+            {
+                error = null;
+                return true;
+            }
+
+            foreach (GearRoleDefinition role in customRoles)
+            {
+                if (role == null)
+                {
+                    error = "A custom role is invalid.";
+                    return false;
+                }
+
+                if (role.IsDefaultRole || !IsCustomRoleId(role.Id))
+                {
+                    error = "Default roles cannot be changed or removed.";
+                    return false;
+                }
+
+                string normalizedName;
+                string nameError;
+                if (!TryNormalizeCustomRoleName(role.Name, out normalizedName, out nameError))
+                {
+                    error = nameError;
+                    return false;
+                }
+
+                if (!ids.Add(role.Id))
+                {
+                    error = "Each custom role must have a unique identifier.";
+                    return false;
+                }
+
+                if (!names.Add(normalizedName))
+                {
+                    error = "Role names must be unique.";
+                    return false;
+                }
+
+                if (validatedRoles.Count >= MaxRoleCount - DefaultRoleCount)
+                {
+                    error = $"You can create at most {MaxRoleCount} roles.";
+                    return false;
+                }
+
+                validatedRoles.Add(new GearRoleDefinition(role.Id, normalizedName, false));
+            }
+
+            error = null;
+            return true;
+        }
+
+        private static int CompareCustomRoles(GearRoleDefinition left, GearRoleDefinition right)
+        {
+            int byName = StringComparer.OrdinalIgnoreCase.Compare(left.Name, right.Name);
+            return byName != 0 ? byName : StringComparer.Ordinal.Compare(left.Id, right.Id);
+        }
+
         public static Dictionary<(GearRole role, int tier), GearPreset> BuildPresets()
         {
             return new Dictionary<(GearRole, int), GearPreset>

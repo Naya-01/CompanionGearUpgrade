@@ -1,3 +1,4 @@
+using CompanionGearUpgrades.Data;
 using CompanionGearUpgrades.Domain;
 using TaleWorlds.Core;
 using TaleWorlds.Library;
@@ -8,12 +9,18 @@ namespace CompanionGearUpgrades.UI
     {
         private void SelectRole(GearRoleOptionViewModel option)
         {
-            _role = option.Role;
+            if (option == null || !ContainsStagedRole(option.RoleId))
+            {
+                StatusText = "The selected role is no longer available.";
+                return;
+            }
+
+            _role = option.RoleId;
             foreach (GearRoleOptionViewModel roleOption in _roles)
-                roleOption.SetSelected(roleOption.Role == _role);
+                roleOption.SetSelected(RoleIdsEqual(roleOption.RoleId, _role));
 
             _tiers.Clear();
-            for (int tier = 1; tier <= 3; tier++)
+            for (int tier = 1; tier <= GearPresetRepository.TierCount; tier++)
                 _tiers.Add(new GearTierOptionViewModel(tier, _service.GetEffectiveCost(_role, tier), SelectTier));
 
             SetPage(Page.Tiers);
@@ -21,7 +28,7 @@ namespace CompanionGearUpgrades.UI
 
         private void SelectTier(GearTierOptionViewModel option)
         {
-            if (_working != null && _workingRole == _role && _workingTier == option.Tier)
+            if (_working != null && RoleIdsEqual(_workingRole, _role) && _workingTier == option.Tier)
             {
                 _tier = option.Tier;
                 foreach (GearTierOptionViewModel tierOption in _tiers)
@@ -31,9 +38,9 @@ namespace CompanionGearUpgrades.UI
                 return;
             }
 
-            if (HasUnsavedChanges)
+            if (HasUnsavedTierChanges)
             {
-                GearRole targetRole = _role;
+                string targetRole = _role;
                 InformationManager.ShowInquiry(new InquiryData(
                     "CGU - Unsaved changes",
                     "Switch presets and discard the unsaved changes to the current preset?",
@@ -50,9 +57,9 @@ namespace CompanionGearUpgrades.UI
             LoadTier(_role, option);
         }
 
-        private void LoadTier(GearRole role, GearTierOptionViewModel option)
+        private void LoadTier(string roleId, GearTierOptionViewModel option)
         {
-            _role = role;
+            _role = roleId;
             GearPreset preset = _service.GetDefaultPresetOrNull(_role, option.Tier);
             if (preset == null)
             {

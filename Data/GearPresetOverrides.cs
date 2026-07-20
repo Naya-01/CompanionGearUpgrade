@@ -39,56 +39,68 @@ namespace CompanionGearUpgrades.Data
             _itemOverrides = itemOverrides ?? new Dictionary<string, string>();
         }
 
-        public int GetEffectiveCost(GearRole role, int tier, int defaultCost)
+        public int GetEffectiveCost(string roleId, int tier, int defaultCost)
         {
-            int v;
-            return _costOverrides.TryGetValue(CostKey(role, tier), out v) ? v : defaultCost;
+            if (!IsSupportedRoleId(roleId) || !GearPresetRepository.IsValidTier(tier))
+                return defaultCost;
+
+            int value;
+            return _costOverrides.TryGetValue(CostKey(roleId, tier), out value) ? value : defaultCost;
         }
 
-        private bool TryGetOverrideItemId(GearRole role, int tier, EquipmentIndex slot, out string itemId)
+        // The enum overload keeps the fixed conversation flow and existing
+        // callers source-compatible. Its keys stay exactly the same as before
+        // (for example, "Infantry:1:cost").
+        public int GetEffectiveCost(GearRole role, int tier, int defaultCost)
+        {
+            return GetEffectiveCost(GearPresetRepository.GetRoleId(role), tier, defaultCost);
+        }
+
+        private bool TryGetOverrideItemId(string roleId, int tier, EquipmentIndex slot, out string itemId)
         {
             itemId = null;
             string storedId;
-            if (!_itemOverrides.TryGetValue(ItemKey(role, tier, slot), out storedId))
+            if (!_itemOverrides.TryGetValue(ItemKey(roleId, tier, slot), out storedId))
                 return false;
 
             itemId = IsEmptyMarker(storedId) ? null : storedId;
             return true;
         }
 
-        private void SetCostOverride(GearRole role, int tier, int cost)
+        private void SetCostOverride(string roleId, int tier, int cost)
         {
-            _costOverrides[CostKey(role, tier)] = Math.Max(0, cost);
+            _costOverrides[CostKey(roleId, tier)] = Math.Max(0, cost);
         }
 
-        private void ClearCostOverride(GearRole role, int tier)
+        private void ClearCostOverride(string roleId, int tier)
         {
-            _costOverrides.Remove(CostKey(role, tier));
+            _costOverrides.Remove(CostKey(roleId, tier));
         }
 
-        private void SetItemOverride(GearRole role, int tier, EquipmentIndex slot, string itemId)
+        private void SetItemOverride(string roleId, int tier, EquipmentIndex slot, string itemId)
         {
             if (string.IsNullOrEmpty(itemId))
             {
-                SetSlotEmpty(role, tier, slot);
+                SetSlotEmpty(roleId, tier, slot);
                 return;
             }
 
-            _itemOverrides[ItemKey(role, tier, slot)] = itemId;
+            _itemOverrides[ItemKey(roleId, tier, slot)] = itemId;
         }
 
-        private void SetSlotEmpty(GearRole role, int tier, EquipmentIndex slot)
+        private void SetSlotEmpty(string roleId, int tier, EquipmentIndex slot)
         {
-            _itemOverrides[ItemKey(role, tier, slot)] = EmptySlotMarker;
+            _itemOverrides[ItemKey(roleId, tier, slot)] = EmptySlotMarker;
         }
 
-        private void ClearItemOverride(GearRole role, int tier, EquipmentIndex slot)
+        private void ClearItemOverride(string roleId, int tier, EquipmentIndex slot)
         {
-            _itemOverrides.Remove(ItemKey(role, tier, slot));
+            _itemOverrides.Remove(ItemKey(roleId, tier, slot));
         }
 
-        public GearPresetSnapshot CaptureSnapshot(GearRole role, int tier, GearPreset defaultPreset)
+        public GearPresetSnapshot CaptureSnapshot(string roleId, int tier, GearPreset defaultPreset)
         {
+            EnsureValidRoleAndTier(roleId, tier);
             if (defaultPreset == null)
                 throw new ArgumentNullException(nameof(defaultPreset));
 
@@ -96,16 +108,22 @@ namespace CompanionGearUpgrades.Data
             foreach (EquipmentIndex slot in EditableSlots)
             {
                 string id;
-                if (TryGetOverrideItemId(role, tier, slot, out id))
+                if (TryGetOverrideItemId(roleId, tier, slot, out id))
                     merged[slot] = id;
             }
 
-            int cost = GetEffectiveCost(role, tier, defaultPreset.Cost);
+            int cost = GetEffectiveCost(roleId, tier, defaultPreset.Cost);
             return new GearPresetSnapshot(cost, merged);
         }
 
-        public void CommitSnapshot(GearRole role, int tier, GearPreset defaultPreset, GearPresetSnapshot snapshot)
+        public GearPresetSnapshot CaptureSnapshot(GearRole role, int tier, GearPreset defaultPreset)
         {
+            return CaptureSnapshot(GearPresetRepository.GetRoleId(role), tier, defaultPreset);
+        }
+
+        public void CommitSnapshot(string roleId, int tier, GearPreset defaultPreset, GearPresetSnapshot snapshot)
+        {
+            EnsureValidRoleAndTier(roleId, tier);
             if (defaultPreset == null)
                 throw new ArgumentNullException(nameof(defaultPreset));
             if (snapshot == null)
@@ -113,9 +131,9 @@ namespace CompanionGearUpgrades.Data
 
             // Cost override: only store if different from default.
             if (snapshot.Cost != defaultPreset.Cost)
-                SetCostOverride(role, tier, snapshot.Cost);
+                SetCostOverride(roleId, tier, snapshot.Cost);
             else
-                ClearCostOverride(role, tier);
+                ClearCostOverride(roleId, tier);
 
             // Item overrides: only store diffs from default. An empty value is
             // persisted explicitly; clearing the dictionary entry would make
@@ -133,19 +151,112 @@ namespace CompanionGearUpgrades.Data
 
                 if (string.IsNullOrEmpty(newId))
                 {
-                    SetSlotEmpty(role, tier, slot);
+                    SetSlotEmpty(roleId, tier, slot);
                     continue;
                 }
 
                 if (!string.Equals(defaultId, newId, StringComparison.Ordinal))
-                    SetItemOverride(role, tier, slot, newId);
+                    SetItemOverride(roleId, tier, slot, newId);
                 else
-                    ClearItemOverride(role, tier, slot);
+                    ClearItemOverride(roleId, tier, slot);
             }
         }
 
-        private static string CostKey(GearRole role, int tier) => $"{role}:{tier}:cost";
-        private static string ItemKey(GearRole role, int tier, EquipmentIndex slot) => $"{role}:{tier}:{(int)slot}";
+        public void CommitSnapshot(GearRole role, int tier, GearPreset defaultPreset, GearPresetSnapshot snapshot)
+        {
+            CommitSnapshot(GearPresetRepository.GetRoleId(role), tier, defaultPreset, snapshot);
+        }
+
+        /// <summary>
+        /// Removes every persisted cost and item override for a deleted custom
+        /// role. Built-in role keys are never eligible for removal here.
+        /// </summary>
+        public void RemoveRoleOverrides(string roleId)
+        {
+            if (!GearPresetRepository.IsCustomRoleId(roleId))
+                return;
+
+            string prefix = roleId + ":";
+            RemoveKeysWithPrefix(_costOverrides, prefix);
+            RemoveKeysWithPrefix(_itemOverrides, prefix);
+        }
+
+        /// <summary>
+        /// Used when a staged role list is committed. This also cleans up a
+        /// newly-created draft role that had tier changes saved before it was
+        /// deleted again, while leaving every default-role override untouched.
+        /// </summary>
+        public void RemoveCustomRoleOverridesExcept(IEnumerable<string> retainedRoleIds)
+        {
+            var retained = new HashSet<string>(retainedRoleIds ?? new string[0], StringComparer.Ordinal);
+            var removedRoleIds = new HashSet<string>(StringComparer.Ordinal);
+            CollectDeletedCustomRoleIds(_costOverrides.Keys, retained, removedRoleIds);
+            CollectDeletedCustomRoleIds(_itemOverrides.Keys, retained, removedRoleIds);
+
+            foreach (string roleId in removedRoleIds)
+                RemoveRoleOverrides(roleId);
+        }
+
+        private static void RemoveKeysWithPrefix<T>(Dictionary<string, T> dictionary, string prefix)
+        {
+            var keysToRemove = new List<string>();
+            foreach (string key in dictionary.Keys)
+            {
+                if (key.StartsWith(prefix, StringComparison.Ordinal))
+                    keysToRemove.Add(key);
+            }
+
+            foreach (string key in keysToRemove)
+                dictionary.Remove(key);
+        }
+
+        private static void CollectDeletedCustomRoleIds(
+            ICollection<string> keys,
+            HashSet<string> retainedRoleIds,
+            HashSet<string> removedRoleIds)
+        {
+            foreach (string key in keys)
+            {
+                string roleId;
+                if (TryGetCustomRoleIdFromKey(key, out roleId) && !retainedRoleIds.Contains(roleId))
+                    removedRoleIds.Add(roleId);
+            }
+        }
+
+        private static bool TryGetCustomRoleIdFromKey(string key, out string roleId)
+        {
+            roleId = null;
+            if (string.IsNullOrEmpty(key))
+                return false;
+
+            int separatorIndex = key.IndexOf(':');
+            if (separatorIndex <= 0)
+                return false;
+
+            string candidate = key.Substring(0, separatorIndex);
+            if (!GearPresetRepository.IsCustomRoleId(candidate))
+                return false;
+
+            roleId = candidate;
+            return true;
+        }
+
+        private static bool IsSupportedRoleId(string roleId)
+        {
+            return GearPresetRepository.IsDefaultRoleId(roleId) ||
+                GearPresetRepository.IsCustomRoleId(roleId);
+        }
+
+        private static void EnsureValidRoleAndTier(string roleId, int tier)
+        {
+            if (!IsSupportedRoleId(roleId))
+                throw new ArgumentException("Unknown role identifier.", nameof(roleId));
+            if (!GearPresetRepository.IsValidTier(tier))
+                throw new ArgumentOutOfRangeException(nameof(tier));
+        }
+
+        private static string CostKey(string roleId, int tier) => $"{roleId}:{tier}:cost";
+        private static string ItemKey(string roleId, int tier, EquipmentIndex slot) => $"{roleId}:{tier}:{(int)slot}";
 
         private static bool IsEmptyMarker(string value)
         {

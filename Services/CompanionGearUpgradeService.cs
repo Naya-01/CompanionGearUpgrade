@@ -17,13 +17,124 @@ namespace CompanionGearUpgrades.Services
     {
         private readonly Dictionary<(GearRole role, int tier), GearPreset> _defaultPresets;
         private readonly GearPresetOverrides _overrides;
+        private readonly Dictionary<string, string> _customRoleNames;
 
         public CompanionGearUpgradeService(
             Dictionary<(GearRole role, int tier), GearPreset> defaultPresets,
             GearPresetOverrides overrides)
+            : this(defaultPresets, overrides, new Dictionary<string, string>())
+        {
+        }
+
+        public CompanionGearUpgradeService(
+            Dictionary<(GearRole role, int tier), GearPreset> defaultPresets,
+            GearPresetOverrides overrides,
+            Dictionary<string, string> customRoleNames)
         {
             _defaultPresets = defaultPresets ?? throw new ArgumentNullException(nameof(defaultPresets));
             _overrides = overrides ?? throw new ArgumentNullException(nameof(overrides));
+            _customRoleNames = customRoleNames ?? new Dictionary<string, string>();
+            GearPresetRepository.NormalizeCustomRoles(_customRoleNames);
+        }
+
+        /// <summary>
+        /// A copy of the persisted catalog. The view model may freely stage
+        /// additions/deletions in its own collection until Save commits them.
+        /// </summary>
+        public IReadOnlyList<GearRoleDefinition> GetRoleDefinitions()
+        {
+            return GearPresetRepository.GetRoles(_customRoleNames).AsReadOnly();
+        }
+
+        public IReadOnlyList<GearRoleDefinition> GetCustomRoles()
+        {
+            return GearPresetRepository.GetCustomRoles(_customRoleNames).AsReadOnly();
+        }
+
+        /// <summary>
+        /// Creates a non-persisted role definition for the UI's staged list.
+        /// The definition becomes campaign data only through
+        /// <see cref="TryCommitCustomRoles"/>.
+        /// </summary>
+        public bool TryCreateCustomRoleDraft(
+            string name,
+            IEnumerable<GearRoleDefinition> currentRoles,
+            out GearRoleDefinition role,
+            out string error)
+        {
+            role = null;
+
+            string normalizedName;
+            if (!GearPresetRepository.TryNormalizeCustomRoleName(name, out normalizedName, out error))
+                return false;
+
+            var ids = new HashSet<string>(StringComparer.Ordinal);
+            var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (GearRoleDefinition defaultRole in GearPresetRepository.GetDefaultRoles())
+                names.Add(defaultRole.Name);
+
+            int customRoleCount = 0;
+            IEnumerable<GearRoleDefinition> rolesToInspect = currentRoles ?? GetRoleDefinitions();
+            foreach (GearRoleDefinition existingRole in rolesToInspect)
+            {
+                if (existingRole == null)
+                    continue;
+
+                if (!string.IsNullOrEmpty(existingRole.Id))
+                    ids.Add(existingRole.Id);
+                if (!string.IsNullOrWhiteSpace(existingRole.Name))
+                    names.Add(existingRole.Name.Trim());
+                if (!existingRole.IsDefaultRole)
+                    customRoleCount++;
+            }
+
+            if (!names.Add(normalizedName))
+            {
+                error = "Role names must be unique.";
+                return false;
+            }
+
+            if (customRoleCount >= GearPresetRepository.MaxRoleCount - GearPresetRepository.DefaultRoleCount)
+            {
+                error = $"You can create at most {GearPresetRepository.MaxRoleCount} roles.";
+                return false;
+            }
+
+            string id;
+            do
+            {
+                id = GearPresetRepository.CustomRoleIdPrefix + Guid.NewGuid().ToString("N");
+            }
+            while (ids.Contains(id));
+
+            role = new GearRoleDefinition(id, normalizedName, false);
+            error = null;
+            return true;
+        }
+
+        /// <summary>
+        /// Atomically replaces the persisted custom-role list after validating
+        /// it. Overrides belonging to a deleted custom role are purged in the
+        /// same operation; default-role overrides are never touched.
+        /// </summary>
+        public bool TryCommitCustomRoles(IEnumerable<GearRoleDefinition> customRoles, out string error)
+        {
+            List<GearRoleDefinition> validatedRoles;
+            if (!GearPresetRepository.TryValidateCustomRoles(customRoles, out validatedRoles, out error))
+                return false;
+
+            var retainedRoleIds = new List<string>();
+            foreach (GearRoleDefinition role in validatedRoles)
+                retainedRoleIds.Add(role.Id);
+
+            _overrides.RemoveCustomRoleOverridesExcept(retainedRoleIds);
+
+            _customRoleNames.Clear();
+            foreach (GearRoleDefinition role in validatedRoles)
+                _customRoleNames.Add(role.Id, role.Name);
+
+            error = null;
+            return true;
         }
 
         public GearPreset GetDefaultPresetOrNull(GearRole role, int tier)
@@ -32,21 +143,52 @@ namespace CompanionGearUpgrades.Services
             return _defaultPresets.TryGetValue((role, tier), out p) ? p : null;
         }
 
+        /// <summary>
+        /// Custom roles intentionally use the Infantry defaults as their
+        /// editable baseline. They therefore always expose exactly tiers 1-3,
+        /// including while a newly-added role still exists only in the UI
+        /// snapshot.
+        /// </summary>
+        public GearPreset GetDefaultPresetOrNull(string roleId, int tier)
+        {
+            GearRole templateRole;
+            if (!TryResolveTemplateRole(roleId, out templateRole) || !GearPresetRepository.IsValidTier(tier))
+                return null;
+
+            return GetDefaultPresetOrNull(templateRole, tier);
+        }
+
         public int GetEffectiveCost(GearRole role, int tier)
         {
-            GearPreset p;
-            if (!_defaultPresets.TryGetValue((role, tier), out p))
+            return GetEffectiveCost(GearPresetRepository.GetRoleId(role), tier);
+        }
+
+        public int GetEffectiveCost(string roleId, int tier)
+        {
+            GearPreset preset = GetDefaultPresetOrNull(roleId, tier);
+            if (preset == null)
                 return 0;
 
-            return _overrides.GetEffectiveCost(role, tier, p.Cost);
+            return _overrides.GetEffectiveCost(roleId, tier, preset.Cost);
         }
 
         public bool SetTierCostVar(GearRole role, int tier, string varName)
         {
-            GearPreset preset;
-            if (_defaultPresets.TryGetValue((role, tier), out preset))
+            return SetTierCostVar(GearPresetRepository.GetRoleId(role), tier, varName);
+        }
+
+        public bool SetTierCostVar(string roleId, int tier, string varName)
+        {
+            if (!IsRoleAvailableForApplication(roleId))
             {
-                int cost = _overrides.GetEffectiveCost(role, tier, preset.Cost);
+                MBTextManager.SetTextVariable(varName, "-");
+                return false;
+            }
+
+            GearPreset preset = GetDefaultPresetOrNull(roleId, tier);
+            if (preset != null)
+            {
+                int cost = _overrides.GetEffectiveCost(roleId, tier, preset.Cost);
                 MBTextManager.SetTextVariable(varName, cost);
                 return true;
             }
@@ -57,25 +199,36 @@ namespace CompanionGearUpgrades.Services
 
         public void TryApplyTier(GearRole role, int tier)
         {
+            TryApplyTier(GearPresetRepository.GetRoleId(role), tier);
+        }
+
+        public void TryApplyTier(string roleId, int tier)
+        {
             Hero target = Hero.OneToOneConversationHero;
             if (target == null || !(target.IsPlayerCompanion || target.Clan == Clan.PlayerClan))
                 return;
 
-            GearPreset preset;
-            if (!_defaultPresets.TryGetValue((role, tier), out preset))
+            if (!IsRoleAvailableForApplication(roleId))
             {
                 InformationManager.DisplayMessage(new InformationMessage("[CGU] Missing preset."));
                 return;
             }
 
-            int cost = _overrides.GetEffectiveCost(role, tier, preset.Cost);
+            GearPreset preset = GetDefaultPresetOrNull(roleId, tier);
+            if (preset == null)
+            {
+                InformationManager.DisplayMessage(new InformationMessage("[CGU] Missing preset."));
+                return;
+            }
+
+            int cost = _overrides.GetEffectiveCost(roleId, tier, preset.Cost);
             if (Hero.MainHero.Gold < cost)
             {
                 InformationManager.DisplayMessage(new InformationMessage("Not enough gold."));
                 return;
             }
 
-            GearPresetSnapshot eff = BuildEffectiveSnapshot(role, tier, preset);
+            GearPresetSnapshot eff = BuildEffectiveSnapshot(roleId, tier, preset);
 
             Equipment newEquipment;
             string error;
@@ -93,7 +246,41 @@ namespace CompanionGearUpgrades.Services
 
         public GearPresetSnapshot BuildEffectiveSnapshot(GearRole role, int tier, GearPreset defaultPreset)
         {
-            return _overrides.CaptureSnapshot(role, tier, defaultPreset);
+            return BuildEffectiveSnapshot(GearPresetRepository.GetRoleId(role), tier, defaultPreset);
+        }
+
+        public GearPresetSnapshot BuildEffectiveSnapshot(string roleId, int tier, GearPreset defaultPreset)
+        {
+            return _overrides.CaptureSnapshot(roleId, tier, defaultPreset);
+        }
+
+        private static bool TryResolveTemplateRole(string roleId, out GearRole templateRole)
+        {
+            if (GearPresetRepository.TryGetDefaultRole(roleId, out templateRole))
+                return true;
+
+            // A custom role has no immutable repository entry of its own. It
+            // starts from Infantry's three presets and stores every user change
+            // under its own stable role ID in GearPresetOverrides.
+            if (GearPresetRepository.IsCustomRoleId(roleId))
+            {
+                templateRole = GearRole.Infantry;
+                return true;
+            }
+
+            templateRole = default(GearRole);
+            return false;
+        }
+
+        /// <summary>
+        /// Draft roles are valid inside the configurator before Save, but a
+        /// conversation must only apply a built-in role or a custom role that
+        /// still exists in the persisted catalogue.
+        /// </summary>
+        private bool IsRoleAvailableForApplication(string roleId)
+        {
+            return GearPresetRepository.IsDefaultRoleId(roleId) ||
+                (GearPresetRepository.IsCustomRoleId(roleId) && _customRoleNames.ContainsKey(roleId));
         }
 
         public List<ItemObject> GetCompatibleItems(EquipmentIndex slot)

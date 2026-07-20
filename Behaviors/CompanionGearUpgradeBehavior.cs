@@ -12,12 +12,17 @@ namespace CompanionGearUpgrades.Behaviors
         // Saved in the savegame via SyncData (simple types only)
         private Dictionary<string, int> _costOverrides;
         private Dictionary<string, string> _itemOverrides;
+        // Stable custom role ID -> display name. Definitions themselves stay
+        // plain savegame-friendly dictionary data; the runtime catalog is
+        // rebuilt when the campaign session starts.
+        private Dictionary<string, string> _customRoleNames;
         private static EquipmentConfigView _equipmentConfigView;
 
         public CompanionGearUpgradeBehavior()
         {
             _costOverrides = new Dictionary<string, int>();
             _itemOverrides = new Dictionary<string, string>();
+            _customRoleNames = new Dictionary<string, string>();
         }
 
         public override void RegisterEvents()
@@ -29,11 +34,19 @@ namespace CompanionGearUpgrades.Behaviors
         {
             dataStore.SyncData("CGU_CostOverrides", ref _costOverrides);
             dataStore.SyncData("CGU_ItemOverrides", ref _itemOverrides);
+            dataStore.SyncData("CGU_CustomRoles", ref _customRoleNames);
 
             if (_costOverrides == null)
                 _costOverrides = new Dictionary<string, int>();
             if (_itemOverrides == null)
                 _itemOverrides = new Dictionary<string, string>();
+            if (_customRoleNames == null)
+                _customRoleNames = new Dictionary<string, string>();
+
+            // Old saves contain no entry under CGU_CustomRoles and therefore
+            // naturally keep the three built-in roles. Normalize newly-loaded
+            // data before it can be exposed to the UI or used for cleanup.
+            GearPresetRepository.NormalizeCustomRoles(_customRoleNames);
         }
 
         private void OnSessionLaunched(CampaignGameStarter starter)
@@ -41,7 +54,7 @@ namespace CompanionGearUpgrades.Behaviors
             var defaults = GearPresetRepository.BuildPresets();
             var overrides = new GearPresetOverrides(_costOverrides, _itemOverrides);
 
-            var service = new CompanionGearUpgradeService(defaults, overrides);
+            var service = new CompanionGearUpgradeService(defaults, overrides, _customRoleNames);
             var dialog = new CompanionGearUpgradeDialog(service);
             dialog.AddDialogs(starter);
 
