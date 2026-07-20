@@ -220,6 +220,7 @@ namespace CompanionGearUpgrades.UI
                 OnPropertyChanged(nameof(IsCategorySelectionVisible));
                 OnPropertyChanged(nameof(IsSlotSelectionVisible));
                 OnPropertyChanged(nameof(IsItemSelectionVisible));
+                OnPropertyChanged(nameof(IsSaveExitVisible));
                 OnPropertyChanged(nameof(IsSaveCancelVisible));
                 OnPropertyChanged(nameof(IsBackVisible));
                 _windowStateChanged?.Invoke(value);
@@ -242,8 +243,13 @@ namespace CompanionGearUpgrades.UI
         public bool IsItemSelectionVisible => IsWindowOpen && _page == Page.Items;
 
         [DataSourceProperty]
-        public bool IsSaveCancelVisible => IsWindowOpen &&
+        public bool IsSaveExitVisible => IsWindowOpen &&
             (_page == Page.Roles || _page == Page.Categories);
+
+        // Kept for compatibility with older prefabs. New UI bindings should
+        // use IsSaveExitVisible so the action is named after its behavior.
+        [DataSourceProperty]
+        public bool IsSaveCancelVisible => IsSaveExitVisible;
 
         [DataSourceProperty]
         public bool IsBackVisible => IsWindowOpen &&
@@ -264,7 +270,7 @@ namespace CompanionGearUpgrades.UI
             if (!visible && IsWindowOpen)
             {
                 bool discardedChanges = HasUnsavedChanges;
-                CloseWithoutSaving();
+                CloseConfiguration();
                 if (discardedChanges)
                 {
                     InformationManager.DisplayMessage(new InformationMessage(
@@ -375,10 +381,10 @@ namespace CompanionGearUpgrades.UI
         public HintViewModel CalculateTierPriceHint => CreateNameHint("Calculate a price from the equipment currently configured for this tier.");
 
         [DataSourceProperty]
-        public HintViewModel SaveHint => CreateNameHint("Save all temporary role and tier changes, then close the configuration.");
+        public HintViewModel SaveHint => CreateNameHint("Save all temporary role and tier changes. The configuration remains open.");
 
         [DataSourceProperty]
-        public HintViewModel ExitHint => CreateNameHint("Cancel and discard all temporary role and tier changes.");
+        public HintViewModel ExitHint => CreateNameHint("Exit the configuration. Unsaved changes require confirmation before they are discarded.");
 
         public void ExecuteOpenConfiguration()
         {
@@ -504,29 +510,29 @@ namespace CompanionGearUpgrades.UI
             }
 
             _savedCustomRoles = new List<GearRoleDefinition>(_customRoles);
+            StatusText = "Changes saved. You can continue editing or exit the configuration.";
             InformationManager.DisplayMessage(new InformationMessage("[CGU] Preset configuration saved."));
-            CloseWithoutSaving();
         }
 
         public void ExecuteExit()
         {
             if (!HasUnsavedChanges)
             {
-                CloseWithoutSaving();
+                CloseConfiguration();
                 return;
             }
 
-            StatusText = "Unsaved changes are still pending.";
+            StatusText = "Unsaved changes are pending. Save before exiting, or discard them to exit.";
             InformationManager.ShowInquiry(new InquiryData(
-                "CGU - Cancel configuration",
-                "You have unsaved role or tier changes. Cancel and discard them?",
+                "CGU - Unsaved changes",
+                "You have unsaved role or tier changes. Exit without saving and discard them?",
                 true,
                 true,
-                "Discard changes",
+                "Exit without saving",
                 "Keep editing",
                 () =>
                 {
-                    CloseWithoutSaving();
+                    CloseConfiguration();
                     InformationManager.DisplayMessage(new InformationMessage(
                         "[CGU] Unsaved changes were discarded."));
                 },

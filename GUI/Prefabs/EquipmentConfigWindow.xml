@@ -470,15 +470,15 @@
 								</ButtonWidget>
 								<ListPanel WidthSizePolicy="CoverChildren" HeightSizePolicy="StretchToParent" HorizontalAlignment="Right" MarginRight="10" StackLayout.LayoutMethod="HorizontalLeftToRight">
 									<Children>
-										<ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="180" SuggestedHeight="48" VerticalAlignment="Center" Brush="Popup.Done.Button.NineGrid" Command.Click="ExecuteSave" DoNotPassEventsToChildren="true" UpdateChildrenStates="true" IsVisible="@IsSaveCancelVisible">
+										<ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="180" SuggestedHeight="48" VerticalAlignment="Center" Brush="Popup.Done.Button.NineGrid" Command.Click="ExecuteSave" DoNotPassEventsToChildren="true" UpdateChildrenStates="true" IsVisible="@IsSaveExitVisible">
 											<Children>
 												<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Text="Save" HorizontalAlignment="Center" VerticalAlignment="Center" Brush="Popup.Button.Text" Brush.FontSize="17" Brush.TextHorizontalAlignment="Center" />
 												<HintWidget DataSource="{SaveHint}" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Command.HoverBegin="ExecuteBeginHint" Command.HoverEnd="ExecuteEndHint" IsDisabled="true" />
 											</Children>
 										</ButtonWidget>
-										<ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="180" SuggestedHeight="48" VerticalAlignment="Center" MarginLeft="10" Brush="Popup.Cancel.Button.NineGrid" Command.Click="ExecuteExit" DoNotPassEventsToChildren="true" UpdateChildrenStates="true" IsVisible="@IsSaveCancelVisible">
+										<ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="180" SuggestedHeight="48" VerticalAlignment="Center" MarginLeft="10" Brush="Popup.Cancel.Button.NineGrid" Command.Click="ExecuteExit" DoNotPassEventsToChildren="true" UpdateChildrenStates="true" IsVisible="@IsSaveExitVisible">
 											<Children>
-												<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Text="Cancel" HorizontalAlignment="Center" VerticalAlignment="Center" Brush="Popup.Button.Text" Brush.FontSize="17" Brush.TextHorizontalAlignment="Center" />
+												<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Text="Exit" HorizontalAlignment="Center" VerticalAlignment="Center" Brush="Popup.Button.Text" Brush.FontSize="17" Brush.TextHorizontalAlignment="Center" />
 												<HintWidget DataSource="{ExitHint}" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Command.HoverBegin="ExecuteBeginHint" Command.HoverEnd="ExecuteEndHint" IsDisabled="true" />
 											</Children>
 										</ButtonWidget>

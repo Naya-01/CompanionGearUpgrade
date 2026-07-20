@@ -28,6 +28,7 @@ namespace CompanionGearUpgrades.UI
             OnPropertyChanged(nameof(IsCategorySelectionVisible));
             OnPropertyChanged(nameof(IsSlotSelectionVisible));
             OnPropertyChanged(nameof(IsItemSelectionVisible));
+            OnPropertyChanged(nameof(IsSaveExitVisible));
             OnPropertyChanged(nameof(IsSaveCancelVisible));
             OnPropertyChanged(nameof(IsBackVisible));
             OnPropertyChanged(nameof(Breadcrumb));
@@ -36,7 +37,7 @@ namespace CompanionGearUpgrades.UI
 
         /// <summary>
         /// Starts a fresh role-editing session from the persisted catalogue.
-        /// The list remains local until ExecuteSave commits it, so Cancel can
+        /// The list remains local until ExecuteSave commits it, so Exit can
         /// safely discard added and deleted custom roles.
         /// </summary>
         private void ReloadStagedRoles()
@@ -350,7 +351,7 @@ namespace CompanionGearUpgrades.UI
             return true;
         }
 
-        private void CloseWithoutSaving()
+        private void CloseConfiguration()
         {
             _role = null;
             _tier = 0;
