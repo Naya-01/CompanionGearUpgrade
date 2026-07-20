@@ -140,7 +140,11 @@
     <Content Include="GUI\PrefabExtensions\ClanEquipmentTab.xml" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="docs\project-guide.fr.md" />
+    <None Include="docs\project-guide.md" />
+    <None Include="docs\README.fr.md" />
     <None Include="README.md" />
+    <None Include="tutorial.MD" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>
