@@ -383,10 +383,8 @@ namespace CompanionGearUpgrades.UI
         /// </summary>
         private void NotifyTransferActionState()
         {
-            OnPropertyChanged(nameof(CanExportRole));
             OnPropertyChanged(nameof(CanExportAll));
             OnPropertyChanged(nameof(CanImport));
-            OnPropertyChanged(nameof(ExportRoleHint));
             OnPropertyChanged(nameof(ExportAllHint));
             OnPropertyChanged(nameof(ImportHint));
         }
@@ -492,9 +490,7 @@ namespace CompanionGearUpgrades.UI
         {
             if (!CanImport)
             {
-                StatusText = HasUnsavedChanges
-                    ? "Save or discard pending changes before importing a JSON file."
-                    : _isImportInProgress
+                StatusText = _isImportInProgress
                         ? "Resolve or cancel the current import before starting another one."
                         : "Import is only available from the role list.";
                 return;
@@ -513,6 +509,25 @@ namespace CompanionGearUpgrades.UI
                 StatusText = string.IsNullOrEmpty(error)
                     ? "The selected JSON file is not a valid preset export."
                     : error;
+                return;
+            }
+
+            if (HasUnsavedChanges)
+            {
+                InformationManager.ShowInquiry(new InquiryData(
+                    "CGU - Unsaved changes",
+                    "You have unsaved local changes. Importing this valid JSON file will discard them before changing this save. Continue?",
+                    true,
+                    true,
+                    "Discard and import",
+                    "Keep editing",
+                    () =>
+                    {
+                        ResetConfigurationAfterImport();
+                        StartPendingImport(document);
+                    },
+                    () => StatusText = "Import cancelled. Your local changes are still available."
+                ));
                 return;
             }
 

@@ -35,12 +35,6 @@
 																		<HintWidget DataSource="{AddRoleHint}" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Command.HoverBegin="ExecuteBeginHint" Command.HoverEnd="ExecuteEndHint" IsDisabled="true" />
 																	</Children>
 																</ButtonWidget>
-																<ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="164" SuggestedHeight="42" MarginLeft="8" VerticalAlignment="Center" Brush="Header.Tab.Center" Command.Click="ExecuteExportRole" IsEnabled="@CanExportRole" DoNotPassEventsToChildren="true" UpdateChildrenStates="true">
-																	<Children>
-																		<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Text="Export role" HorizontalAlignment="Center" VerticalAlignment="Center" Brush="InventoryDefaultFontBrush" Brush.FontSize="16" Brush.TextHorizontalAlignment="Center" />
-																		<HintWidget DataSource="{ExportRoleHint}" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Command.HoverBegin="ExecuteBeginHint" Command.HoverEnd="ExecuteEndHint" IsDisabled="true" />
-																	</Children>
-																</ButtonWidget>
 																<ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="154" SuggestedHeight="42" MarginLeft="8" VerticalAlignment="Center" Brush="Header.Tab.Center" Command.Click="ExecuteExportAll" IsEnabled="@CanExportAll" DoNotPassEventsToChildren="true" UpdateChildrenStates="true">
 																	<Children>
 																		<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Text="Export all" HorizontalAlignment="Center" VerticalAlignment="Center" Brush="InventoryDefaultFontBrush" Brush.FontSize="16" Brush.TextHorizontalAlignment="Center" />

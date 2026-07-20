@@ -138,28 +138,16 @@ namespace CompanionGearUpgrades.UI
                 : "You can configure at most 10 roles, including Archer, Infantry, and Lancer.");
 
         [DataSourceProperty]
-        public bool CanExportRole => IsRoleSelectionVisible &&
-            !HasUnsavedChanges &&
-            !string.IsNullOrEmpty(_role) &&
-            ContainsStagedRole(_role);
-
-        [DataSourceProperty]
         public bool CanExportAll => IsRoleSelectionVisible &&
             !HasUnsavedChanges &&
             _roles.Count > 0;
 
         [DataSourceProperty]
-        public bool CanImport => IsRoleSelectionVisible &&
-            !HasUnsavedChanges &&
-            !_isImportInProgress;
-
-        [DataSourceProperty]
-        public HintViewModel ExportRoleHint => CreateNameHint(
-            HasUnsavedChanges
-                ? "Save pending changes before exporting a role."
-                : string.IsNullOrEmpty(_role)
-                    ? "Select a role before exporting it."
-                    : "Export the selected role and its three tiers to a JSON file.");
+        // The Import button exists only in the role page, but it must be
+        // usable as soon as the window first opens.  The command itself asks
+        // before discarding a real local draft, rather than requiring a Save
+        // merely to make the action clickable.
+        public bool CanImport => !_isImportInProgress;
 
         [DataSourceProperty]
         public HintViewModel ExportAllHint => CreateNameHint(
@@ -170,7 +158,7 @@ namespace CompanionGearUpgrades.UI
         [DataSourceProperty]
         public HintViewModel ImportHint => CreateNameHint(
             HasUnsavedChanges
-                ? "Save or discard pending changes before importing a JSON file."
+                ? "Importing will ask before discarding pending local changes."
                 : _isImportInProgress
                     ? "An import is already waiting for a conflict decision."
                     : "Import roles and presets from a JSON file into this save.");
@@ -495,29 +483,6 @@ namespace CompanionGearUpgrades.UI
             ));
         }
 
-        public void ExecuteExportRole()
-        {
-            if (!CanExportRole)
-            {
-                StatusText = HasUnsavedChanges
-                    ? "Save pending changes before exporting a role."
-                    : "Select a role before exporting it.";
-                return;
-            }
-
-            string roleId = _role;
-            InformationManager.ShowTextInquiry(new TextInquiryData(
-                "CGU - Export role",
-                "Enter the destination file path. The .json extension is added if needed:",
-                true,
-                true,
-                "Export",
-                "Cancel",
-                path => ExportRolesToFile(path, new[] { roleId }, GetRoleDisplayName(roleId)),
-                () => StatusText = "Role export cancelled."
-            ));
-        }
-
         private void ExecuteExportRoleFromOption(GearRoleOptionViewModel option)
         {
             if (option == null || string.IsNullOrEmpty(option.RoleId) ||
@@ -571,16 +536,19 @@ namespace CompanionGearUpgrades.UI
 
         public void ExecuteImport()
         {
-            if (!CanImport)
+            if (!IsRoleSelectionVisible || _isImportInProgress)
             {
-                StatusText = HasUnsavedChanges
-                    ? "Save or discard pending changes before importing a JSON file."
-                    : _isImportInProgress
-                        ? "Resolve or cancel the current import before starting another one."
-                        : "Import is only available from the role list.";
+                StatusText = _isImportInProgress
+                    ? "Resolve or cancel the current import before starting another one."
+                    : "Import is only available from the role list.";
                 return;
             }
 
+            ShowImportFileInquiry();
+        }
+
+        private void ShowImportFileInquiry()
+        {
             InformationManager.ShowTextInquiry(new TextInquiryData(
                 "CGU - Import roles",
                 "Enter the full path of the JSON file to import into the current save:",
