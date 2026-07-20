@@ -254,6 +254,377 @@ namespace CompanionGearUpgrades.Services
             return _overrides.CaptureSnapshot(roleId, tier, defaultPreset);
         }
 
+        /// <summary>
+        /// Builds a self-contained transfer document from the currently
+        /// persisted role catalogue. Every editable slot is present, including
+        /// intentionally empty slots, so the resulting JSON does not depend on
+        /// either the source campaign or repository defaults.
+        /// </summary>
+        public GearPresetTransferDocument CreateTransferDocument(IEnumerable<GearRoleDefinition> roles = null)
+        {
+            var document = new GearPresetTransferDocument
+            {
+                SchemaVersion = GearPresetTransferDocument.CurrentSchemaVersion,
+                ModVersion = GetModVersion(),
+                Roles = new List<GearPresetTransferRole>()
+            };
+
+            IReadOnlyList<GearRoleDefinition> persistedRoles = GetRoleDefinitions();
+            var persistedById = new Dictionary<string, GearRoleDefinition>(StringComparer.Ordinal);
+            foreach (GearRoleDefinition persistedRole in persistedRoles)
+                persistedById[persistedRole.Id] = persistedRole;
+
+            IEnumerable<GearRoleDefinition> rolesToExport = roles ?? persistedRoles;
+            var exportedRoleIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (GearRoleDefinition requestedRole in rolesToExport)
+            {
+                if (requestedRole == null || string.IsNullOrEmpty(requestedRole.Id) ||
+                    !exportedRoleIds.Add(requestedRole.Id))
+                {
+                    continue;
+                }
+
+                GearRoleDefinition role;
+                if (!persistedById.TryGetValue(requestedRole.Id, out role))
+                    continue;
+
+                var transferRole = new GearPresetTransferRole
+                {
+                    Name = role.Name,
+                    Tiers = new List<GearPresetTransferTier>()
+                };
+
+                for (int tier = 1; tier <= GearPresetRepository.TierCount; tier++)
+                {
+                    GearPreset defaultPreset = GetDefaultPresetOrNull(role.Id, tier);
+                    if (defaultPreset == null)
+                        continue;
+
+                    GearPresetSnapshot snapshot = BuildEffectiveSnapshot(role.Id, tier, defaultPreset);
+                    var slots = new Dictionary<string, string>(StringComparer.Ordinal);
+                    foreach (EquipmentIndex slot in GearPresetOverrides.EditableSlots)
+                    {
+                        string itemId;
+                        snapshot.Slots.TryGetValue(slot, out itemId);
+                        slots[GearPresetTransferSlots.GetSlotName(slot)] = itemId;
+                    }
+
+                    transferRole.Tiers.Add(new GearPresetTransferTier
+                    {
+                        Tier = tier,
+                        Price = snapshot.Cost,
+                        Slots = slots
+                    });
+                }
+
+                document.Roles.Add(transferRole);
+            }
+
+            return document;
+        }
+
+        /// <summary>
+        /// Applies configurations already validated and conflict-resolved by
+        /// the UI. The map key is the stable destination role identifier; the
+        /// supplied custom-role list is the complete catalogue that should
+        /// remain in the campaign after the import. All data and item lookups
+        /// are prepared before the first campaign-backed collection is changed.
+        /// </summary>
+        public bool TryApplyImportedConfiguration(
+            IEnumerable<GearRoleDefinition> finalCustomRoles,
+            IDictionary<string, GearPresetTransferRole> configurationsByTargetRoleId,
+            out GearPresetImportResult result,
+            out string error)
+        {
+            result = new GearPresetImportResult();
+            error = null;
+
+            if (finalCustomRoles == null)
+            {
+                error = "The complete target role catalogue is required for import.";
+                return false;
+            }
+
+            List<GearRoleDefinition> validatedCustomRoles;
+            if (!GearPresetRepository.TryValidateCustomRoles(finalCustomRoles, out validatedCustomRoles, out error))
+                return false;
+
+            if (configurationsByTargetRoleId == null || configurationsByTargetRoleId.Count == 0)
+            {
+                error = "There are no role configurations to import.";
+                return false;
+            }
+
+            var validCustomRoleIds = new HashSet<string>(StringComparer.Ordinal);
+            foreach (GearRoleDefinition customRole in validatedCustomRoles)
+                validCustomRoleIds.Add(customRole.Id);
+
+            var preparedConfigurations = new List<PreparedImportedRole>();
+            var targetRoleIds = new HashSet<string>(StringComparer.Ordinal);
+            var missingItemIds = new HashSet<string>(StringComparer.Ordinal);
+            int importedItemCount = 0;
+            int missingSlotCount = 0;
+
+            foreach (KeyValuePair<string, GearPresetTransferRole> entry in configurationsByTargetRoleId)
+            {
+                string targetRoleId;
+                if (!TryCanonicalizeImportedTargetRoleId(entry.Key, validCustomRoleIds, out targetRoleId, out error))
+                    return false;
+
+                if (!targetRoleIds.Add(targetRoleId))
+                {
+                    error = "The import contains more than one configuration for the same role.";
+                    return false;
+                }
+
+                PreparedImportedRole preparedRole;
+                int roleImportedItemCount;
+                int roleMissingSlotCount;
+                if (!TryPrepareImportedRole(
+                    targetRoleId,
+                    entry.Value,
+                    out preparedRole,
+                    out roleImportedItemCount,
+                    out roleMissingSlotCount,
+                    missingItemIds,
+                    out error))
+                {
+                    return false;
+                }
+
+                foreach (PreparedImportedTier preparedTier in preparedRole.Tiers)
+                {
+                    if (GetDefaultPresetOrNull(targetRoleId, preparedTier.Tier) == null)
+                    {
+                        error = "The import target has no valid preset template.";
+                        return false;
+                    }
+                }
+
+                preparedConfigurations.Add(preparedRole);
+                importedItemCount += roleImportedItemCount;
+                missingSlotCount += roleMissingSlotCount;
+            }
+
+            // No mutation has occurred above this point. The two operations
+            // below only use already checked role IDs, tiers and snapshots.
+            if (!TryCommitCustomRoles(validatedCustomRoles, out error))
+                return false;
+
+            foreach (PreparedImportedRole preparedRole in preparedConfigurations)
+            {
+                foreach (PreparedImportedTier preparedTier in preparedRole.Tiers)
+                {
+                    GearPreset defaultPreset = GetDefaultPresetOrNull(preparedRole.TargetRoleId, preparedTier.Tier);
+                    _overrides.CommitSnapshot(
+                        preparedRole.TargetRoleId,
+                        preparedTier.Tier,
+                        defaultPreset,
+                        preparedTier.Snapshot);
+                }
+            }
+
+            result.ImportedRoleCount = preparedConfigurations.Count;
+            result.ImportedItemCount = importedItemCount;
+            result.MissingSlotCount = missingSlotCount;
+            result.MissingItemIds = new List<string>(missingItemIds);
+            result.ImportedRoleNames = GetImportedRoleNames(preparedConfigurations);
+            return true;
+        }
+
+        private static string GetModVersion()
+        {
+            Version version = typeof(CompanionGearUpgradeService).Assembly.GetName().Version;
+            return version != null ? version.ToString() : "unknown";
+        }
+
+        private static bool TryCanonicalizeImportedTargetRoleId(
+            string requestedRoleId,
+            HashSet<string> validCustomRoleIds,
+            out string targetRoleId,
+            out string error)
+        {
+            targetRoleId = null;
+            error = null;
+            if (string.IsNullOrWhiteSpace(requestedRoleId))
+            {
+                error = "An imported role has no destination.";
+                return false;
+            }
+
+            string trimmedRoleId = requestedRoleId.Trim();
+            foreach (GearRoleDefinition defaultRole in GearPresetRepository.GetDefaultRoles())
+            {
+                if (string.Equals(trimmedRoleId, defaultRole.Id, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(trimmedRoleId, defaultRole.Name, StringComparison.OrdinalIgnoreCase))
+                {
+                    targetRoleId = defaultRole.Id;
+                    return true;
+                }
+            }
+
+            if (validCustomRoleIds.Contains(trimmedRoleId))
+            {
+                targetRoleId = trimmedRoleId;
+                return true;
+            }
+
+            error = "An imported role no longer exists in the target catalogue.";
+            return false;
+        }
+
+        private static bool TryPrepareImportedRole(
+            string targetRoleId,
+            GearPresetTransferRole transferRole,
+            out PreparedImportedRole preparedRole,
+            out int importedItemCount,
+            out int missingSlotCount,
+            HashSet<string> missingItemIds,
+            out string error)
+        {
+            preparedRole = null;
+            importedItemCount = 0;
+            missingSlotCount = 0;
+            error = null;
+
+            if (transferRole == null || transferRole.Tiers == null ||
+                transferRole.Tiers.Count != GearPresetRepository.TierCount)
+            {
+                error = "Each imported role must contain exactly three tiers.";
+                return false;
+            }
+
+            var tiersByNumber = new Dictionary<int, GearPresetTransferTier>();
+            foreach (GearPresetTransferTier transferTier in transferRole.Tiers)
+            {
+                if (transferTier == null || !GearPresetRepository.IsValidTier(transferTier.Tier) ||
+                    transferTier.Price < 0 || transferTier.Slots == null ||
+                    transferTier.Slots.Count != GearPresetOverrides.EditableSlots.Length ||
+                    tiersByNumber.ContainsKey(transferTier.Tier))
+                {
+                    error = "An imported tier is invalid.";
+                    return false;
+                }
+
+                tiersByNumber.Add(transferTier.Tier, transferTier);
+            }
+
+            var preparedTiers = new List<PreparedImportedTier>();
+            for (int tier = 1; tier <= GearPresetRepository.TierCount; tier++)
+            {
+                GearPresetTransferTier transferTier;
+                if (!tiersByNumber.TryGetValue(tier, out transferTier))
+                {
+                    error = "Each imported role must contain tiers 1, 2 and 3.";
+                    return false;
+                }
+
+                var slots = new Dictionary<EquipmentIndex, string>();
+                foreach (EquipmentIndex slot in GearPresetOverrides.EditableSlots)
+                    slots.Add(slot, null);
+
+                var assignedSlots = new HashSet<EquipmentIndex>();
+                foreach (KeyValuePair<string, string> slotEntry in transferTier.Slots)
+                {
+                    EquipmentIndex slot;
+                    if (!GearPresetTransferSlots.TryGetSlot(slotEntry.Key, out slot) ||
+                        !assignedSlots.Add(slot))
+                    {
+                        error = "An imported tier contains an unsupported slot.";
+                        return false;
+                    }
+
+                    string itemId = slotEntry.Value;
+                    if (itemId == null)
+                    {
+                        slots[slot] = null;
+                        continue;
+                    }
+
+                    if (string.IsNullOrWhiteSpace(itemId))
+                    {
+                        error = "An imported equipment StringId is invalid.";
+                        return false;
+                    }
+
+                    ItemObject item = MBObjectManager.Instance.GetObject<ItemObject>(itemId);
+                    if (item == null)
+                    {
+                        // A third-party item's absence is a warning, not a
+                        // failed import. Explicitly persist an empty slot so
+                        // no default item is silently substituted later.
+                        slots[slot] = null;
+                        missingSlotCount++;
+                        missingItemIds.Add(itemId);
+                        continue;
+                    }
+
+                    if (!GetAllowedItemTypesForSlot(slot).Contains(item.ItemType))
+                    {
+                        error = "An imported item is not compatible with its target slot.";
+                        return false;
+                    }
+
+                    slots[slot] = itemId;
+                    importedItemCount++;
+                }
+
+                if (assignedSlots.Count != GearPresetOverrides.EditableSlots.Length)
+                {
+                    error = "Each imported tier must explicitly include every editable slot.";
+                    return false;
+                }
+
+                preparedTiers.Add(new PreparedImportedTier(
+                    tier,
+                    new GearPresetSnapshot(transferTier.Price, slots)));
+            }
+
+            preparedRole = new PreparedImportedRole(targetRoleId, preparedTiers);
+            return true;
+        }
+
+        private IReadOnlyList<string> GetImportedRoleNames(IEnumerable<PreparedImportedRole> preparedRoles)
+        {
+            var namesById = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (GearRoleDefinition role in GetRoleDefinitions())
+                namesById[role.Id] = role.Name;
+
+            var names = new List<string>();
+            foreach (PreparedImportedRole preparedRole in preparedRoles)
+            {
+                string name;
+                names.Add(namesById.TryGetValue(preparedRole.TargetRoleId, out name)
+                    ? name
+                    : preparedRole.TargetRoleId);
+            }
+            return names;
+        }
+
+        private sealed class PreparedImportedRole
+        {
+            public PreparedImportedRole(string targetRoleId, List<PreparedImportedTier> tiers)
+            {
+                TargetRoleId = targetRoleId;
+                Tiers = tiers;
+            }
+
+            public string TargetRoleId { get; private set; }
+            public List<PreparedImportedTier> Tiers { get; private set; }
+        }
+
+        private sealed class PreparedImportedTier
+        {
+            public PreparedImportedTier(int tier, GearPresetSnapshot snapshot)
+            {
+                Tier = tier;
+                Snapshot = snapshot;
+            }
+
+            public int Tier { get; private set; }
+            public GearPresetSnapshot Snapshot { get; private set; }
+        }
+
         private static bool TryResolveTemplateRole(string roleId, out GearRole templateRole)
         {
             if (GearPresetRepository.TryGetDefaultRole(roleId, out templateRole))
@@ -398,5 +769,27 @@ namespace CompanionGearUpgrades.Services
                     };
             }
         }
+    }
+
+    /// <summary>
+    /// Details of a completed import. Missing StringIds are kept separate from
+    /// invalid JSON: they merely mean their destination slots were persisted
+    /// as empty and can be selected manually later.
+    /// </summary>
+    public sealed class GearPresetImportResult
+    {
+        public GearPresetImportResult()
+        {
+            MissingItemIds = new List<string>();
+            ImportedRoleNames = new List<string>();
+        }
+
+        public int ImportedRoleCount { get; internal set; }
+        public int ImportedItemCount { get; internal set; }
+        public int MissingSlotCount { get; internal set; }
+        public IReadOnlyList<string> MissingItemIds { get; internal set; }
+        public IReadOnlyList<string> ImportedRoleNames { get; internal set; }
+
+        public bool HasWarnings => MissingSlotCount > 0;
     }
 }

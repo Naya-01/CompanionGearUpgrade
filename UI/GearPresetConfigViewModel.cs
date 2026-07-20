@@ -34,6 +34,10 @@ namespace CompanionGearUpgrades.UI
         private readonly MBBindingList<GearRoleOptionViewModel> _roles;
         private readonly List<GearRoleDefinition> _customRoles;
         private List<GearRoleDefinition> _savedCustomRoles;
+        private readonly List<PendingImportRole> _pendingImportRoles;
+        private GearPresetTransferDocument _pendingImportDocument;
+        private int _pendingImportConflictIndex;
+        private bool _isImportInProgress;
         private readonly MBBindingList<GearTierOptionViewModel> _tiers;
         private readonly MBBindingList<GearCategoryOptionViewModel> _categories;
         private readonly MBBindingList<GearSlotOptionViewModel> _slots;
@@ -93,6 +97,7 @@ namespace CompanionGearUpgrades.UI
             _roles = new MBBindingList<GearRoleOptionViewModel>();
             _customRoles = new List<GearRoleDefinition>();
             _savedCustomRoles = new List<GearRoleDefinition>();
+            _pendingImportRoles = new List<PendingImportRole>();
             _tiers = new MBBindingList<GearTierOptionViewModel>();
             _categories = new MBBindingList<GearCategoryOptionViewModel>();
             _slots = new MBBindingList<GearSlotOptionViewModel>();
@@ -131,6 +136,44 @@ namespace CompanionGearUpgrades.UI
             CanAddRole
                 ? "Create a custom role with three upgrade tiers."
                 : "You can configure at most 10 roles, including Archer, Infantry, and Lancer.");
+
+        [DataSourceProperty]
+        public bool CanExportRole => IsRoleSelectionVisible &&
+            !HasUnsavedChanges &&
+            !string.IsNullOrEmpty(_role) &&
+            ContainsStagedRole(_role);
+
+        [DataSourceProperty]
+        public bool CanExportAll => IsRoleSelectionVisible &&
+            !HasUnsavedChanges &&
+            _roles.Count > 0;
+
+        [DataSourceProperty]
+        public bool CanImport => IsRoleSelectionVisible &&
+            !HasUnsavedChanges &&
+            !_isImportInProgress;
+
+        [DataSourceProperty]
+        public HintViewModel ExportRoleHint => CreateNameHint(
+            HasUnsavedChanges
+                ? "Save pending changes before exporting a role."
+                : string.IsNullOrEmpty(_role)
+                    ? "Select a role before exporting it."
+                    : "Export the selected role and its three tiers to a JSON file.");
+
+        [DataSourceProperty]
+        public HintViewModel ExportAllHint => CreateNameHint(
+            HasUnsavedChanges
+                ? "Save pending changes before exporting roles."
+                : "Export all roles and their three tiers to a JSON file.");
+
+        [DataSourceProperty]
+        public HintViewModel ImportHint => CreateNameHint(
+            HasUnsavedChanges
+                ? "Save or discard pending changes before importing a JSON file."
+                : _isImportInProgress
+                    ? "An import is already waiting for a conflict decision."
+                    : "Import roles and presets from a JSON file into this save.");
 
         [DataSourceProperty]
         public MBBindingList<GearTierOptionViewModel> TierOptions => _tiers;
@@ -223,6 +266,7 @@ namespace CompanionGearUpgrades.UI
                 OnPropertyChanged(nameof(IsSaveExitVisible));
                 OnPropertyChanged(nameof(IsSaveCancelVisible));
                 OnPropertyChanged(nameof(IsBackVisible));
+                NotifyTransferActionState();
                 _windowStateChanged?.Invoke(value);
             }
         }
@@ -397,6 +441,7 @@ namespace CompanionGearUpgrades.UI
             _tier = 0;
             _selectedCandidateId = null;
             ClearItemInspection();
+            ClearPendingImport();
             ReloadStagedRoles();
             _page = Page.Roles;
             StatusText = "Select a role and tier to edit a preset.";
@@ -447,6 +492,104 @@ namespace CompanionGearUpgrades.UI
                 "Keep role",
                 () => DeleteCustomRoleDraft(option),
                 () => StatusText = "Role deletion cancelled."
+            ));
+        }
+
+        public void ExecuteExportRole()
+        {
+            if (!CanExportRole)
+            {
+                StatusText = HasUnsavedChanges
+                    ? "Save pending changes before exporting a role."
+                    : "Select a role before exporting it.";
+                return;
+            }
+
+            string roleId = _role;
+            InformationManager.ShowTextInquiry(new TextInquiryData(
+                "CGU - Export role",
+                "Enter the destination file path. The .json extension is added if needed:",
+                true,
+                true,
+                "Export",
+                "Cancel",
+                path => ExportRolesToFile(path, new[] { roleId }, GetRoleDisplayName(roleId)),
+                () => StatusText = "Role export cancelled."
+            ));
+        }
+
+        private void ExecuteExportRoleFromOption(GearRoleOptionViewModel option)
+        {
+            if (option == null || string.IsNullOrEmpty(option.RoleId) ||
+                !ContainsStagedRole(option.RoleId))
+            {
+                StatusText = "The selected role is no longer available to export.";
+                return;
+            }
+
+            if (HasUnsavedChanges)
+            {
+                StatusText = "Save pending changes before exporting a role.";
+                return;
+            }
+
+            string roleId = option.RoleId;
+            string roleName = option.Name;
+            InformationManager.ShowTextInquiry(new TextInquiryData(
+                "CGU - Export role",
+                "Enter the destination file path. The .json extension is added if needed:",
+                true,
+                true,
+                "Export",
+                "Cancel",
+                path => ExportRolesToFile(path, new[] { roleId }, roleName),
+                () => StatusText = "Role export cancelled."
+            ));
+        }
+
+        public void ExecuteExportAll()
+        {
+            if (!CanExportAll)
+            {
+                StatusText = HasUnsavedChanges
+                    ? "Save pending changes before exporting roles."
+                    : "No roles are available to export.";
+                return;
+            }
+
+            InformationManager.ShowTextInquiry(new TextInquiryData(
+                "CGU - Export all roles",
+                "Enter the destination file path. The .json extension is added if needed:",
+                true,
+                true,
+                "Export",
+                "Cancel",
+                path => ExportRolesToFile(path, null, "all roles"),
+                () => StatusText = "Role export cancelled."
+            ));
+        }
+
+        public void ExecuteImport()
+        {
+            if (!CanImport)
+            {
+                StatusText = HasUnsavedChanges
+                    ? "Save or discard pending changes before importing a JSON file."
+                    : _isImportInProgress
+                        ? "Resolve or cancel the current import before starting another one."
+                        : "Import is only available from the role list.";
+                return;
+            }
+
+            InformationManager.ShowTextInquiry(new TextInquiryData(
+                "CGU - Import roles",
+                "Enter the full path of the JSON file to import into the current save:",
+                true,
+                true,
+                "Import",
+                "Cancel",
+                BeginImportFromFile,
+                () => StatusText = "Role import cancelled."
             ));
         }
 
@@ -510,6 +653,7 @@ namespace CompanionGearUpgrades.UI
             }
 
             _savedCustomRoles = new List<GearRoleDefinition>(_customRoles);
+            NotifyTransferActionState();
             StatusText = "Changes saved. You can continue editing or exit the configuration.";
             InformationManager.DisplayMessage(new InformationMessage("[CGU] Preset configuration saved."));
         }

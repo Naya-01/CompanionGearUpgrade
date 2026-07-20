@@ -49,6 +49,7 @@
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />
+    <Reference Include="System.Runtime.Serialization" />
     <Reference Include="System.Xml" />
     <Reference Include="TaleWorlds.CampaignSystem">
       <HintPath>E:\SteamLibrary\steamapps\common\Mount &amp; Blade II Bannerlord\bin\Win64_Shipping_Client\TaleWorlds.CampaignSystem.dll</HintPath>
@@ -108,6 +109,7 @@
     <Compile Include="Data\GearPresetOverrides.cs" />
     <Compile Include="Data\GearPresetRepository.cs" />
     <Compile Include="Data\GearPresetSnapshot.cs" />
+    <Compile Include="Data\GearPresetTransfer.cs" />
     <Compile Include="Dialog\CompanionGearUpgradeDialog.cs" />
     <Compile Include="Domain\GearPreset.cs" />
     <Compile Include="Domain\GearRole.cs" />

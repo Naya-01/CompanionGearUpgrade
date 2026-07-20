@@ -8,6 +8,7 @@ namespace CompanionGearUpgrades.UI
     {
         private readonly Action<GearRoleOptionViewModel> _onSelected;
         private readonly Action<GearRoleOptionViewModel> _onDelete;
+        private readonly Action<GearRoleOptionViewModel> _onExport;
         private bool _isSelected;
 
         public GearRoleOptionViewModel(
@@ -15,13 +16,15 @@ namespace CompanionGearUpgrades.UI
             string name,
             bool isDefaultRole,
             Action<GearRoleOptionViewModel> onSelected,
-            Action<GearRoleOptionViewModel> onDelete)
+            Action<GearRoleOptionViewModel> onDelete,
+            Action<GearRoleOptionViewModel> onExport)
         {
             RoleId = roleId;
             Name = name;
             IsDefaultRole = isDefaultRole;
             _onSelected = onSelected;
             _onDelete = onDelete;
+            _onExport = onExport;
         }
 
         /// <summary>
@@ -42,6 +45,12 @@ namespace CompanionGearUpgrades.UI
         public HintViewModel DeleteRoleHint => new HintViewModel(
             new TaleWorlds.Localization.TextObject(
                 "Delete this custom role and all of its tier configuration when you save."),
+            null);
+
+        [DataSourceProperty]
+        public HintViewModel ExportRoleHint => new HintViewModel(
+            new TaleWorlds.Localization.TextObject(
+                "Export this role and its three tier presets to a JSON file."),
             null);
 
         [DataSourceProperty]
@@ -66,6 +75,11 @@ namespace CompanionGearUpgrades.UI
         public void ExecuteDelete()
         {
             _onDelete?.Invoke(this);
+        }
+
+        public void ExecuteExport()
+        {
+            _onExport?.Invoke(this);
         }
 
         public void SetSelected(bool selected)
