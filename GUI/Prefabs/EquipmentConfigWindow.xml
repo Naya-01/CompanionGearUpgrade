@@ -308,9 +308,10 @@
 																				<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="28" MarginLeft="12" Text="SORT RESULTS" VerticalAlignment="Center" Brush="InventoryHeaderFontBrush" Brush.FontSize="14" DoNotAcceptEvents="true" />
 																				<ListPanel DataSource="{SortOptions}" WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="38" MarginLeft="8" MarginRight="8" MarginTop="30" StackLayout.LayoutMethod="HorizontalLeftToRight">
 																					<ItemTemplate>
-																						<ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="208" SuggestedHeight="36" MarginRight="4" Brush="Inventory.SidePanel.ValueSort.Left" ButtonType="Radio" IsSelected="@IsSelected" DominantSelectedState="true" Command.Click="ExecuteSelect" DoNotPassEventsToChildren="true" UpdateChildrenStates="true">
+																						<ButtonWidget WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="208" SuggestedHeight="36" MarginRight="4" Brush="Header.Tab.Center" ButtonType="Radio" IsSelected="@IsSelected" DominantSelectedState="true" Command.Click="ExecuteSelect" DoNotPassEventsToChildren="true" UpdateChildrenStates="true">
 																							<Children>
-																								<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Text="@Name" HorizontalAlignment="Center" VerticalAlignment="Center" Brush="InventoryDefaultFontBrush" Brush.FontSize="13" Brush.TextHorizontalAlignment="Center" DoNotAcceptEvents="true" />
+																								<TextWidget WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" MarginLeft="6" MarginRight="6" Text="@Name" HorizontalAlignment="Center" VerticalAlignment="Center" Brush="Clan.TabControl.Text" Brush.FontSize="15" Brush.TextHorizontalAlignment="Center" ClipContents="true" DoNotAcceptEvents="true" />
+																								<Widget WidthSizePolicy="StretchToParent" HeightSizePolicy="Fixed" SuggestedHeight="3" VerticalAlignment="Bottom" Sprite="BlankWhiteSquare_9" Color="#E0BC62FF" IsVisible="@IsSelected" DoNotAcceptEvents="true" />
 																							</Children>
 																						</ButtonWidget>
 																					</ItemTemplate>
