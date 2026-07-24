@@ -1,6 +1,6 @@
-<ButtonWidget Id="CGU_ApplyGearPresetButton" DoNotPassEventsToChildren="true" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="34" SuggestedHeight="34" VerticalAlignment="Center" MarginLeft="5" MarginRight="5" Brush="Inventory.Tuple.Extension.SpecialButton" Command.Click="ExecuteApplyGearPreset" IsVisible="@IsGearPresetApplyVisible" IsEnabled="@IsGearPresetApplyEnabled" UpdateChildrenStates="true">
+<ButtonWidget Id="CGU_ApplyGearPresetButton" DoNotPassEventsToChildren="true" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="42" SuggestedHeight="42" VerticalAlignment="Center" MarginLeft="5" MarginRight="6" Brush="Inventory.Tuple.Extension.SpecialButton" Command.Click="ExecuteApplyGearPreset" IsVisible="@IsGearPresetApplyVisible" IsEnabled="@IsGearPresetApplyEnabled" UpdateChildrenStates="true">
   <Children>
-    <ImageWidget DoNotAcceptEvents="true" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="22" SuggestedHeight="22" HorizontalAlignment="Center" VerticalAlignment="Center" Brush="Inventory.Tuple.Extension.EquipButtonIcon" />
+    <Widget DoNotAcceptEvents="true" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="32" SuggestedHeight="31" HorizontalAlignment="Center" VerticalAlignment="Center" Sprite="General\EquipmentIcons\equipment_type_head_armor" Color="#FFF0BDFF" />
     <HintWidget DoNotAcceptEvents="true" DataSource="{GearPresetApplyHint}" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Command.HoverBegin="ExecuteBeginHint" Command.HoverEnd="ExecuteEndHint" />
   </Children>
 </ButtonWidget>
