@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using CompanionGearUpgrades.Services;
 using TaleWorlds.Core;
 
 namespace CompanionGearUpgrades.UI
@@ -142,7 +143,7 @@ namespace CompanionGearUpgrades.UI
 
         private void RefreshItemInspection()
         {
-            ItemObject configuredItem = FindItem(GetWorkingSlotId(_slot));
+            ItemObject configuredItem = GearItemCatalog.FindById(GetWorkingSlotId(_slot));
             GearItemOptionViewModel selectedCandidate = FindCandidate(_selectedCandidateId);
             ItemObject selectedItem = selectedCandidate != null ? selectedCandidate.Item : null;
             _inspectedItem = GetInspectedItem(configuredItem, selectedItem);

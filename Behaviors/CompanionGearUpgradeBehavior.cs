@@ -61,7 +61,7 @@ namespace CompanionGearUpgrades.Behaviors
 
             // Clan and conversation configuration share this exact Gauntlet
             // view, service and persisted override store.
-            _equipmentConfigView = new EquipmentConfigView(service, overrides);
+            _equipmentConfigView = new EquipmentConfigView(service);
             _equipmentConfigView.Initialize();
 
             _applyGearPresetView = new ApplyGearPresetView(service);

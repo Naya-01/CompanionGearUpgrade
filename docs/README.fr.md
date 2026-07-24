@@ -319,7 +319,7 @@ IsItemSelectionVisible
 | Clique un slot | `SelectSlot` | Charge le catalogue compatible, filtres et liste visible, puis passe à Items. |
 | Clique Back | `ExecuteBack` | Revient à la page précédente ; depuis Roles, demande Exit. |
 
-La répartition des slots est centralisée dans [GearPresetConfigViewModel.Formatting.cs](../UI/GearPresetConfigViewModel.Formatting.cs) :
+L’ordre, les noms stables, la répartition et les types compatibles des slots sont centralisés dans [GearSlotCatalog.cs](../Domain/GearSlotCatalog.cs). [GearPresetConfigViewModel.Formatting.cs](../UI/GearPresetConfigViewModel.Formatting.cs) ne fait que projeter ce catalogue dans les catégories UI :
 
 | Catégorie | Slots |
 | --- | --- |
@@ -327,7 +327,7 @@ La répartition des slots est centralisée dans [GearPresetConfigViewModel.Forma
 | Armors | `Head`, `Body`, `Cape`, `Gloves`, `Leg` |
 | Horse | `Horse`, `HorseHarness` |
 
-`GetSlotName()` utilise volontairement un `switch` explicite. Ne remplacez pas ce code par `EquipmentIndex.ToString()` : certaines valeurs Bannerlord possèdent des alias qui donnent un nom moins adapté à l’UI.
+`GetSlotName()` délègue au nom stable explicite du catalogue. Ne remplacez pas les noms d’export par `EquipmentIndex.ToString()` : ils font partie du schéma JSON v1.
 
 Les rôles, les trois tiers et les trois catégories sont construits explicitement par le code actuel. Un quatrième tier n’est pas automatiquement découvert : il faut faire évoluer le dépôt, les options UI et les lignes de dialogue ensemble.
 
@@ -580,7 +580,7 @@ Le service :
 6. écrit tous les slots éditables, y compris les slots absents ou `null` qui doivent être vides ;
 7. retire l’or et assigne le nouvel équipement.
 
-Le détail important pour l’UI : ajouter un slot dans `GearPresetOverrides.EditableSlots` le fait participer à la capture, au commit et à l’application. Ne déplacez pas cette règle dans un ViewModel.
+Le détail important pour l’UI : `GearSlotCatalog.EditableSlots` pilote la capture, le commit, le transfert et l’application. Ne dupliquez pas cette règle dans un ViewModel ou une classe de persistance.
 
 ## 14. Déboguer un flow UI
 
@@ -650,17 +650,7 @@ Le flow annule d’abord le survol, puis le rafraîchissement final recalcule la
 
 ### 15.3 Ajouter un slot ou une catégorie
 
-Pour ajouter un **slot**, vérifiez simultanément :
-
-1. `GearPresetOverrides.EditableSlots` ;
-2. `GetSlotsForCategory(...)` ;
-3. `GetSlotName(...)` ;
-4. `CompanionGearUpgradeService.GetAllowedItemTypesForSlot(...)` ;
-5. les presets par défaut ;
-6. la persistance `null` / marqueur vide ;
-7. les tests d’un slot vide.
-
-Le service d’application parcourt déjà `GearPresetOverrides.EditableSlots` : ajouter le slot à cette liste le couvre automatiquement pour capture, commit et application. Le mapping de types compatibles reste toutefois à ajouter explicitement.
+Pour ajouter un **slot**, définissez une seule fois son ordre, son nom JSON stable, son groupe et son type compatible dans `GearSlotCatalog`, puis adaptez les presets par défaut et les tests de slot vide. Le schéma v1 exigeant explicitement chaque slot pris en charge, modifier cet ensemble impose aussi une nouvelle version volontaire du schéma de transfert.
 
 Pour ajouter une **catégorie**, ajoutez en plus :
 

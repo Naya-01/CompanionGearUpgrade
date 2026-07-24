@@ -3,9 +3,7 @@ using SandBox.GauntletUI;
 using System;
 using TaleWorlds.CampaignSystem;
 using TaleWorlds.Engine.GauntletUI;
-using TaleWorlds.GauntletUI.BaseTypes;
 using TaleWorlds.Library;
-using TaleWorlds.MountAndBlade.GauntletUI.Widgets;
 using TaleWorlds.ScreenSystem;
 
 namespace CompanionGearUpgrades.UI
@@ -124,14 +122,13 @@ namespace CompanionGearUpgrades.UI
                 return;
             }
 
-            ItemTableauWidget previewHost = GetPreviewHost();
-            bool isHostReady = previewHost != null &&
-                previewHost.ConnectedToRoot &&
-                previewHost.IsRecursivelyVisible() &&
-                previewHost.TextureProvider != null;
-            bool isTextureReady = isHostReady &&
-                previewHost.Texture != null &&
-                previewHost.Texture.IsValid;
+            bool isHostReady;
+            bool isTextureReady;
+            ItemPreviewHostProbe.GetState(
+                _layer,
+                "CGUApplyPresetPreviewTableau",
+                out isHostReady,
+                out isTextureReady);
 
             _viewModel.OnGauntletTick(isHostReady, isTextureReady);
         }
@@ -217,36 +214,7 @@ namespace CompanionGearUpgrades.UI
 
         private void SetLayerInteraction(bool isModal)
         {
-            if (_layer == null || _isLayerModal == isModal)
-                return;
-
-            _isLayerModal = isModal;
-            if (isModal)
-            {
-                _layer.InputRestrictions.SetInputRestrictions(true, InputUsageMask.All);
-                _layer.IsFocusLayer = true;
-                ScreenManager.TrySetFocus(_layer);
-            }
-            else
-            {
-                _layer.IsFocusLayer = false;
-                _layer.InputRestrictions.ResetInputRestrictions();
-                ScreenManager.TryLoseFocus(_layer);
-            }
-        }
-
-        private ItemTableauWidget GetPreviewHost()
-        {
-            Widget root = _layer?.UIContext?.Root;
-            if (root == null)
-                return null;
-
-            var previewWidgets = root.FindChildrenWithId<ItemTableauWidget>(
-                "CGUApplyPresetPreviewTableau",
-                true);
-            return previewWidgets == null || previewWidgets.Count == 0
-                ? null
-                : previewWidgets[0];
+            GauntletModalLayerInteraction.SetModal(_layer, ref _isLayerModal, isModal);
         }
 
         private void ReleaseMovie()

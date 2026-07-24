@@ -9,6 +9,8 @@ namespace CompanionGearUpgrades
 {
     public sealed class SubModule : MBSubModuleBase
     {
+        private const string HarmonyId = "CompanionGearUpgrades.ClanEquipment";
+
         private UIExtender _uiExtender;
         private Harmony _harmony;
 
@@ -20,7 +22,7 @@ namespace CompanionGearUpgrades
             _uiExtender.Register(typeof(SubModule).Assembly);
             _uiExtender.Enable();
 
-            _harmony = new Harmony("CompanionGearUpgrades.ClanEquipment");
+            _harmony = new Harmony(HarmonyId);
             _harmony.PatchAll(typeof(SubModule).Assembly);
         }
 
@@ -50,7 +52,7 @@ namespace CompanionGearUpgrades
 
             if (_harmony != null)
             {
-                _harmony.UnpatchAll("CompanionGearUpgrades.ClanEquipment");
+                _harmony.UnpatchAll(HarmonyId);
                 _harmony = null;
             }
 

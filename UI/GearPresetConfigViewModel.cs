@@ -8,7 +8,6 @@ using TaleWorlds.Core;
 using TaleWorlds.Core.ViewModelCollection;
 using TaleWorlds.Core.ViewModelCollection.Information;
 using TaleWorlds.Library;
-using TaleWorlds.ObjectSystem;
 
 namespace CompanionGearUpgrades.UI
 {
@@ -18,6 +17,9 @@ namespace CompanionGearUpgrades.UI
     /// </summary>
     public sealed partial class GearPresetConfigViewModel : ViewModel
     {
+        private const int MaximumImportCopyNameAttempts = 1000;
+        private const int MaximumVisibleMissingItemIds = 5;
+
         private enum Page
         {
             Roles,
@@ -28,7 +30,6 @@ namespace CompanionGearUpgrades.UI
         }
 
         private readonly CompanionGearUpgradeService _service;
-        private readonly GearPresetOverrides _overrides;
         private readonly Action<bool> _windowStateChanged;
 
         private readonly MBBindingList<GearRoleOptionViewModel> _roles;
@@ -71,11 +72,9 @@ namespace CompanionGearUpgrades.UI
 
         public GearPresetConfigViewModel(
             CompanionGearUpgradeService service,
-            GearPresetOverrides overrides,
             Action<bool> windowStateChanged = null)
         {
             _service = service ?? throw new ArgumentNullException(nameof(service));
-            _overrides = overrides ?? throw new ArgumentNullException(nameof(overrides));
             _windowStateChanged = windowStateChanged;
 
             _roles = new MBBindingList<GearRoleOptionViewModel>();
@@ -90,7 +89,7 @@ namespace CompanionGearUpgrades.UI
             _filters = new MBBindingList<GearItemFilterOptionViewModel>();
             _sortOptions = new MBBindingList<GearItemSortOptionViewModel>();
             _previewSession = new ItemPreviewSession(
-                FindItem,
+                GearItemCatalog.FindById,
                 CanRetryPreviewAfterClose,
                 NotifyPreviewStateChanged,
                 NotifyPreviewChanged,
@@ -106,6 +105,18 @@ namespace CompanionGearUpgrades.UI
             _sortOptions.Add(new GearItemSortOptionViewModel(GearItemSortOrder.ValueAscending, "Price: low to high", SelectSort));
             _sortOptions.Add(new GearItemSortOptionViewModel(GearItemSortOrder.ValueDescending, "Price: high to low", SelectSort));
             SetSelectedSortOption();
+        }
+
+        // Retains the previous public constructor shape for source consumers;
+        // persistence now flows through the service instead of this argument.
+        public GearPresetConfigViewModel(
+            CompanionGearUpgradeService service,
+            GearPresetOverrides overrides,
+            Action<bool> windowStateChanged = null)
+            : this(service, windowStateChanged)
+        {
+            if (overrides == null)
+                throw new ArgumentNullException(nameof(overrides));
         }
 
         [DataSourceProperty]
@@ -124,7 +135,7 @@ namespace CompanionGearUpgrades.UI
         public HintViewModel AddRoleHint => CreateNameHint(
             CanAddRole
                 ? "Create a custom role with three upgrade tiers."
-                : "You can configure at most 10 roles, including Archer, Infantry, and Lancer.");
+                : $"You can configure at most {GearPresetRepository.MaxRoleCount} roles, including Archer, Infantry, and Lancer.");
 
         [DataSourceProperty]
         public bool CanExportAll => IsRoleSelectionVisible &&
@@ -275,7 +286,9 @@ namespace CompanionGearUpgrades.UI
         public bool IsBackVisible => IsWindowOpen &&
             (_page == Page.Tiers || _page == Page.Categories || _page == Page.Slots || _page == Page.Items);
 
-        private bool HasUnsavedTierChanges => !SnapshotsEqual(_working, _savedSnapshot);
+        private bool HasUnsavedTierChanges =>
+            !ReferenceEquals(_working, _savedSnapshot) &&
+            (_working == null || !_working.HasSameContent(_savedSnapshot));
 
         private bool HasUnsavedRoleChanges => !RoleDefinitionsEqual(_customRoles, _savedCustomRoles);
 
@@ -341,7 +354,7 @@ namespace CompanionGearUpgrades.UI
                 if (string.IsNullOrEmpty(id))
                     return "(empty slot)";
 
-                ItemObject item = FindItem(id);
+                ItemObject item = GearItemCatalog.FindById(id);
                 return item != null ? item.Name.ToString() : "Missing item";
             }
         }
@@ -429,7 +442,7 @@ namespace CompanionGearUpgrades.UI
         {
             if (!CanAddRole)
             {
-                StatusText = "The 10 role limit has been reached.";
+                StatusText = $"The {GearPresetRepository.MaxRoleCount} role limit has been reached.";
                 return;
             }
 
@@ -573,7 +586,6 @@ namespace CompanionGearUpgrades.UI
 
         public void ExecuteSave()
         {
-            GearPreset defaultPreset = null;
             if (HasUnsavedTierChanges)
             {
                 if (string.IsNullOrEmpty(_workingRole) || !ContainsStagedRole(_workingRole))
@@ -582,8 +594,7 @@ namespace CompanionGearUpgrades.UI
                     return;
                 }
 
-                defaultPreset = _service.GetDefaultPresetOrNull(_workingRole, _workingTier);
-                if (defaultPreset == null)
+                if (_service.GetDefaultPresetOrNull(_workingRole, _workingTier) == null)
                 {
                     StatusText = "The selected preset is not available.";
                     return;
@@ -599,7 +610,14 @@ namespace CompanionGearUpgrades.UI
 
             if (HasUnsavedTierChanges)
             {
-                _overrides.CommitSnapshot(_workingRole, _workingTier, defaultPreset, _working);
+                if (!_service.TryCommitPresetSnapshot(_workingRole, _workingTier, _working, out error))
+                {
+                    StatusText = string.IsNullOrEmpty(error)
+                        ? "The selected preset could not be saved."
+                        : error;
+                    return;
+                }
+
                 _savedSnapshot = _working.Clone();
                 foreach (GearTierOptionViewModel tierOption in _tiers)
                 {
@@ -674,7 +692,7 @@ namespace CompanionGearUpgrades.UI
 
         public void ExecuteResetTierToDefault()
         {
-            GearPresetSnapshot defaultSnapshot = CreateDefaultTierSnapshot(_role, _tier);
+            GearPresetSnapshot defaultSnapshot = _service.GetDefaultSnapshotOrNull(_role, _tier);
             if (defaultSnapshot == null)
             {
                 StatusText = "The selected preset is not available.";
@@ -724,7 +742,7 @@ namespace CompanionGearUpgrades.UI
 
             int calculatedPrice;
             string error;
-            if (!TryCalculateTierPriceFromEquipment(_working, out calculatedPrice, out error))
+            if (!_service.TryCalculatePresetPrice(_working, out calculatedPrice, out error))
             {
                 StatusText = error;
                 return;
@@ -750,59 +768,9 @@ namespace CompanionGearUpgrades.UI
                 return;
             }
 
-            _working = new GearPresetSnapshot(calculatedPrice, _working.Slots);
+            _working = _working.WithCost(calculatedPrice);
             OnPropertyChanged(nameof(CurrentTierCostText));
             StatusText = $"Temporary tier price calculated from equipment: {_working.Cost} gold.";
-        }
-
-        private static bool TryCalculateTierPriceFromEquipment(
-            GearPresetSnapshot snapshot,
-            out int calculatedPrice,
-            out string error)
-        {
-            calculatedPrice = 0;
-            error = null;
-
-            if (snapshot == null || snapshot.Slots == null)
-            {
-                error = "The current tier is not available.";
-                return false;
-            }
-
-            long total = 0;
-            foreach (EquipmentIndex slot in GearPresetOverrides.EditableSlots)
-            {
-                string itemId;
-                if (!snapshot.Slots.TryGetValue(slot, out itemId) || string.IsNullOrEmpty(itemId))
-                    continue;
-
-                ItemObject item = MBObjectManager.Instance.GetObject<ItemObject>(itemId);
-                if (item == null)
-                {
-                    error = $"Cannot calculate price: configured item '{itemId}' is unavailable.";
-                    return false;
-                }
-
-                total += item.Value;
-                if (total > int.MaxValue)
-                {
-                    error = "Calculated equipment value is too high.";
-                    return false;
-                }
-            }
-
-            calculatedPrice = (int)total;
-            return true;
-        }
-
-        private GearPresetSnapshot CreateDefaultTierSnapshot(string roleId, int tier)
-        {
-            GearPreset defaultPreset = _service.GetDefaultPresetOrNull(roleId, tier);
-            return defaultPreset == null
-                ? null
-                : new GearPresetSnapshot(
-                    defaultPreset.Cost,
-                    new Dictionary<EquipmentIndex, string>(defaultPreset.Slots));
         }
 
         private static bool TrySetSnapshotPrice(
@@ -812,10 +780,12 @@ namespace CompanionGearUpgrades.UI
         {
             updatedSnapshot = snapshot;
             int value;
-            if (snapshot == null || !int.TryParse(text, out value) || value < 0)
+            if (snapshot == null ||
+                !int.TryParse(text, out value) ||
+                !GearPresetPricePolicy.IsValid(value))
                 return false;
 
-            updatedSnapshot = new GearPresetSnapshot(value, snapshot.Slots);
+            updatedSnapshot = snapshot.WithCost(value);
             return true;
         }
     }

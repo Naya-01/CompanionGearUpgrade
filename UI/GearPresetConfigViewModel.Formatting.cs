@@ -1,3 +1,4 @@
+using CompanionGearUpgrades.Domain;
 using System.Collections.Generic;
 using TaleWorlds.Core;
 using TaleWorlds.Core.ViewModelCollection.Information;
@@ -9,26 +10,8 @@ namespace CompanionGearUpgrades.UI
     {
         private static IEnumerable<string> GetOrderedItemTypeNames()
         {
-            return new[]
-            {
-                "OneHandedWeapon",
-                "TwoHandedWeapon",
-                "Polearm",
-                "Bow",
-                "Crossbow",
-                "Thrown",
-                "Shield",
-                "Arrows",
-                "Bolts",
-                "Banner",
-                "HeadArmor",
-                "BodyArmor",
-                "Cape",
-                "HandArmor",
-                "LegArmor",
-                "Horse",
-                "HorseHarness"
-            };
+            foreach (ItemObject.ItemTypeEnum itemType in GearSlotCatalog.SupportedItemTypes)
+                yield return itemType.ToString();
         }
 
         private static string GetItemTypeDisplayName(string itemTypeName)
@@ -74,44 +57,17 @@ namespace CompanionGearUpgrades.UI
             switch (category)
             {
                 case GearPresetCategory.Weapons:
-                    return new[]
-                    {
-                        EquipmentIndex.Weapon0,
-                        EquipmentIndex.Weapon1,
-                        EquipmentIndex.Weapon2,
-                        EquipmentIndex.Weapon3
-                    };
+                    return GearSlotCatalog.WeaponSlots;
                 case GearPresetCategory.Armors:
-                    return new[]
-                    {
-                        EquipmentIndex.Head,
-                        EquipmentIndex.Body,
-                        EquipmentIndex.Cape,
-                        EquipmentIndex.Gloves,
-                        EquipmentIndex.Leg
-                    };
+                    return GearSlotCatalog.ArmorSlots;
                 default:
-                    return new[] { EquipmentIndex.Horse, EquipmentIndex.HorseHarness };
+                    return GearSlotCatalog.MountSlots;
             }
         }
 
         private static string GetSlotName(EquipmentIndex slot)
         {
-            switch (slot)
-            {
-                case EquipmentIndex.Weapon0: return "Weapon0";
-                case EquipmentIndex.Weapon1: return "Weapon1";
-                case EquipmentIndex.Weapon2: return "Weapon2";
-                case EquipmentIndex.Weapon3: return "Weapon3";
-                case EquipmentIndex.Head: return "Head";
-                case EquipmentIndex.Body: return "Body";
-                case EquipmentIndex.Cape: return "Cape";
-                case EquipmentIndex.Gloves: return "Gloves";
-                case EquipmentIndex.Leg: return "Leg";
-                case EquipmentIndex.Horse: return "Horse";
-                case EquipmentIndex.HorseHarness: return "HorseHarness";
-                default: return slot.ToString();
-            }
+            return GearSlotCatalog.GetDisplayName(slot);
         }
     }
 }

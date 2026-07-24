@@ -1,4 +1,5 @@
 using CompanionGearUpgrades.Data;
+using CompanionGearUpgrades.Domain;
 using CompanionGearUpgrades.Services;
 using System;
 using System.Collections.Generic;
@@ -9,7 +10,6 @@ using TaleWorlds.Core.ViewModelCollection;
 using TaleWorlds.Core.ViewModelCollection.Information;
 using TaleWorlds.Library;
 using TaleWorlds.Localization;
-using TaleWorlds.ObjectSystem;
 
 namespace CompanionGearUpgrades.UI
 {
@@ -48,7 +48,7 @@ namespace CompanionGearUpgrades.UI
             _tiers = new MBBindingList<GearTierOptionViewModel>();
             _equipment = new MBBindingList<ApplyGearPresetEquipmentOptionViewModel>();
             _previewSession = new ItemPreviewSession(
-                FindItem,
+                GearItemCatalog.FindById,
                 CanRetryPreviewAfterClose,
                 NotifyPreviewStateChanged,
                 NotifyPreviewChanged,
@@ -407,15 +407,15 @@ namespace CompanionGearUpgrades.UI
             if (_selectedSnapshot == null)
                 return;
 
-            foreach (EquipmentIndex slot in GearPresetOverrides.EditableSlots)
+            foreach (EquipmentIndex slot in GearSlotCatalog.EditableSlots)
             {
                 string itemId;
                 _selectedSnapshot.Slots.TryGetValue(slot, out itemId);
-                ItemObject item = FindItem(itemId);
+                ItemObject item = GearItemCatalog.FindById(itemId);
                 bool isEmpty = string.IsNullOrEmpty(itemId);
                 _equipment.Add(new ApplyGearPresetEquipmentOptionViewModel(
                     slot,
-                    GearPresetTransferSlots.GetSlotName(slot) ?? slot.ToString(),
+                    GearSlotCatalog.GetDisplayName(slot),
                     isEmpty ? "(empty)" : (item != null ? item.Name.ToString() : "Unavailable item"),
                     itemId,
                     item != null,
@@ -458,7 +458,7 @@ namespace CompanionGearUpgrades.UI
             foreach (ApplyGearPresetEquipmentOptionViewModel equipment in _equipment)
                 equipment.SetSelected(ReferenceEquals(equipment, option));
 
-            ItemObject item = FindItem(option.ItemId);
+            ItemObject item = GearItemCatalog.FindById(option.ItemId);
             if (item == null)
             {
                 SetPreviewItem(null, option);
@@ -530,14 +530,6 @@ namespace CompanionGearUpgrades.UI
             IsWindowOpen = false;
             ReleasePreviewSession();
             _requestClose?.Invoke();
-        }
-
-        private static ItemObject FindItem(string itemId)
-        {
-            if (string.IsNullOrEmpty(itemId) || MBObjectManager.Instance == null)
-                return null;
-
-            return MBObjectManager.Instance.GetObject<ItemObject>(itemId);
         }
 
         public override void OnFinalize()

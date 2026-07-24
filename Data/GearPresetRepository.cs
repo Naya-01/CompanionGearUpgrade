@@ -33,6 +33,7 @@ namespace CompanionGearUpgrades.Data
         public const int TierCount = 3;
         public const int MaxRoleCount = 10;
         public const int DefaultRoleCount = 3;
+        public const int MaxCustomRoleCount = MaxRoleCount - DefaultRoleCount;
 
         internal const string CustomRoleIdPrefix = "custom-";
 
@@ -162,7 +163,7 @@ namespace CompanionGearUpgrades.Data
 
             foreach (KeyValuePair<string, string> entry in entries)
             {
-                if (normalized.Count >= MaxRoleCount - DefaultRoleCount || !IsCustomRoleId(entry.Key))
+                if (normalized.Count >= MaxCustomRoleCount || !IsCustomRoleId(entry.Key))
                     continue;
 
                 string normalizedName;
@@ -236,7 +237,7 @@ namespace CompanionGearUpgrades.Data
                     return false;
                 }
 
-                if (validatedRoles.Count >= MaxRoleCount - DefaultRoleCount)
+                if (validatedRoles.Count >= MaxCustomRoleCount)
                 {
                     error = $"You can create at most {MaxRoleCount} roles.";
                     return false;

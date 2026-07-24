@@ -1,3 +1,4 @@
+using CompanionGearUpgrades.Domain;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -59,48 +60,14 @@ namespace CompanionGearUpgrades.Data
     /// </summary>
     public static class GearPresetTransferSlots
     {
-        private static readonly Dictionary<string, EquipmentIndex> SlotsByName =
-            new Dictionary<string, EquipmentIndex>(StringComparer.Ordinal)
-            {
-                { "Weapon0", EquipmentIndex.Weapon0 },
-                { "Weapon1", EquipmentIndex.Weapon1 },
-                { "Weapon2", EquipmentIndex.Weapon2 },
-                { "Weapon3", EquipmentIndex.Weapon3 },
-                { "Head", EquipmentIndex.Head },
-                { "Body", EquipmentIndex.Body },
-                { "Cape", EquipmentIndex.Cape },
-                { "Gloves", EquipmentIndex.Gloves },
-                { "Leg", EquipmentIndex.Leg },
-                { "Horse", EquipmentIndex.Horse },
-                { "HorseHarness", EquipmentIndex.HorseHarness }
-            };
-
-        private static readonly Dictionary<EquipmentIndex, string> NamesBySlot =
-            new Dictionary<EquipmentIndex, string>
-            {
-                { EquipmentIndex.Weapon0, "Weapon0" },
-                { EquipmentIndex.Weapon1, "Weapon1" },
-                { EquipmentIndex.Weapon2, "Weapon2" },
-                { EquipmentIndex.Weapon3, "Weapon3" },
-                { EquipmentIndex.Head, "Head" },
-                { EquipmentIndex.Body, "Body" },
-                { EquipmentIndex.Cape, "Cape" },
-                { EquipmentIndex.Gloves, "Gloves" },
-                { EquipmentIndex.Leg, "Leg" },
-                { EquipmentIndex.Horse, "Horse" },
-                { EquipmentIndex.HorseHarness, "HorseHarness" }
-            };
-
         public static bool TryGetSlot(string name, out EquipmentIndex slot)
         {
-            slot = default(EquipmentIndex);
-            return !string.IsNullOrEmpty(name) && SlotsByName.TryGetValue(name, out slot);
+            return GearSlotCatalog.TryGetSlot(name, out slot);
         }
 
         public static string GetSlotName(EquipmentIndex slot)
         {
-            string name;
-            return NamesBySlot.TryGetValue(slot, out name) ? name : null;
+            return GearSlotCatalog.GetStableName(slot);
         }
     }
 
@@ -296,7 +263,9 @@ namespace CompanionGearUpgrades.Data
             var tierNumbers = new HashSet<int>();
             foreach (GearPresetTransferTier tier in role.Tiers)
             {
-                if (tier == null || !GearPresetRepository.IsValidTier(tier.Tier) || tier.Price < 0)
+                if (tier == null ||
+                    !GearPresetRepository.IsValidTier(tier.Tier) ||
+                    !GearPresetPricePolicy.IsValid(tier.Price))
                 {
                     error = "An imported tier has an invalid number or price.";
                     return false;
@@ -308,7 +277,7 @@ namespace CompanionGearUpgrades.Data
                     return false;
                 }
 
-                if (tier.Slots == null || tier.Slots.Count != GearPresetOverrides.EditableSlots.Length)
+                if (tier.Slots == null || tier.Slots.Count != GearSlotCatalog.EditableSlots.Count)
                 {
                     error = "Each tier must explicitly contain every supported equipment slot.";
                     return false;
@@ -334,7 +303,7 @@ namespace CompanionGearUpgrades.Data
                     }
                 }
 
-                if (slots.Count != GearPresetOverrides.EditableSlots.Length)
+                if (slots.Count != GearSlotCatalog.EditableSlots.Count)
                 {
                     error = "Each tier must explicitly contain every supported equipment slot.";
                     return false;

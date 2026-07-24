@@ -319,7 +319,7 @@ IsItemSelectionVisible
 | Click a slot | `SelectSlot` | Loads the compatible catalog, filters, and visible list, then moves to Items. |
 | Click Back | `ExecuteBack` | Goes to the previous page; from Roles, starts Exit. |
 
-Slot grouping is centralized in [GearPresetConfigViewModel.Formatting.cs](UI/GearPresetConfigViewModel.Formatting.cs):
+Slot order, stable names, grouping, and compatible item types are centralized in [GearSlotCatalog.cs](Domain/GearSlotCatalog.cs). [GearPresetConfigViewModel.Formatting.cs](UI/GearPresetConfigViewModel.Formatting.cs) only projects that catalogue into UI categories:
 
 | Category | Slots |
 | --- | --- |
@@ -327,7 +327,7 @@ Slot grouping is centralized in [GearPresetConfigViewModel.Formatting.cs](UI/Gea
 | Armors | `Head`, `Body`, `Cape`, `Gloves`, `Leg` |
 | Horse | `Horse`, `HorseHarness` |
 
-`GetSlotName()` deliberately uses an explicit `switch`. Do not replace it with `EquipmentIndex.ToString()`: some Bannerlord values have aliases that give names less suitable for the UI.
+`GetSlotName()` delegates to the catalogue's explicit stable name. Do not replace export names with `EquipmentIndex.ToString()`: those names are part of JSON schema v1.
 
 The roles, the three tiers, and the three categories are explicitly constructed by the current code. A fourth tier is not discovered automatically: the repository, UI options, and dialogue lines must be updated together.
 
@@ -580,7 +580,7 @@ The service:
 6. writes every editable slot, including missing or `null` slots that must be empty;
 7. removes gold and assigns the new equipment.
 
-The important UI detail is that adding a slot to `GearPresetOverrides.EditableSlots` makes it participate in capture, commit, and application. Do not move that rule into a ViewModel.
+The important UI detail is that `GearSlotCatalog.EditableSlots` drives capture, commit, transfer, and application. Do not duplicate that rule in a ViewModel or persistence class.
 
 ## 14. Debugging a UI flow
 
@@ -650,17 +650,7 @@ The flow first clears hover; the final refresh recalculates tooltip/preview prio
 
 ### 15.3 Add a slot or category
 
-To add a **slot**, update all of the following together:
-
-1. `GearPresetOverrides.EditableSlots`;
-2. `GetSlotsForCategory(...)`;
-3. `GetSlotName(...)`;
-4. `CompanionGearUpgradeService.GetAllowedItemTypesForSlot(...)`;
-5. default presets;
-6. `null` / empty-marker persistence;
-7. tests for an empty slot.
-
-The application service already iterates `GearPresetOverrides.EditableSlots`: adding the slot to that array covers capture, commit, and application automatically. Its compatible-type mapping must still be added explicitly.
+To add a **slot**, define its order, stable JSON name, category, and compatible item type once in `GearSlotCatalog`, then update default presets and empty-slot tests as needed. Because schema v1 requires every supported slot explicitly, changing that set also requires a deliberate transfer-schema version change.
 
 To add a **category**, also add:
 

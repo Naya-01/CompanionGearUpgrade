@@ -201,6 +201,9 @@ namespace CompanionGearUpgrades.UI
             ItemObject item = _findItem(_requestedItemId);
             if (item == null)
             {
+                // Consume an attempt just like a native Open failure. Without
+                // this, Tick retries the same missing item every frame forever.
+                _openAttempt++;
                 SetState("The selected item is no longer available for preview.");
                 NotifyPreviewChanged();
                 return;

@@ -4,9 +4,7 @@ using SandBox.GauntletUI;
 using System;
 using TaleWorlds.CampaignSystem;
 using TaleWorlds.Engine.GauntletUI;
-using TaleWorlds.GauntletUI.BaseTypes;
 using TaleWorlds.Library;
-using TaleWorlds.MountAndBlade.GauntletUI.Widgets;
 using TaleWorlds.ScreenSystem;
 
 namespace CompanionGearUpgrades.UI
@@ -27,7 +25,6 @@ namespace CompanionGearUpgrades.UI
         private const string LayerName = "CompanionGearUpgradeEquipmentConfig";
 
         private readonly CompanionGearUpgradeService _service;
-        private readonly GearPresetOverrides _overrides;
 
         private EquipmentConfigGlobalLayer _globalLayer;
         private GauntletLayer _layer;
@@ -40,10 +37,20 @@ namespace CompanionGearUpgrades.UI
         private bool _releaseMovieOnNextTick;
         private ScreenBase _pendingConversationScreen;
 
-        public EquipmentConfigView(CompanionGearUpgradeService service, GearPresetOverrides overrides)
+        public EquipmentConfigView(CompanionGearUpgradeService service)
         {
             _service = service ?? throw new ArgumentNullException(nameof(service));
-            _overrides = overrides ?? throw new ArgumentNullException(nameof(overrides));
+        }
+
+        // Compatibility overload: the service owns persistence now, but older
+        // callers can keep passing the shared override store.
+        public EquipmentConfigView(
+            CompanionGearUpgradeService service,
+            GearPresetOverrides overrides)
+            : this(service)
+        {
+            if (overrides == null)
+                throw new ArgumentNullException(nameof(overrides));
         }
 
         public void Initialize()
@@ -118,7 +125,7 @@ namespace CompanionGearUpgrades.UI
                 if (_viewModel == null)
                 {
                     createdViewModel =
-                        new GearPresetConfigViewModel(_service, _overrides, SetWindowLayerState);
+                        new GearPresetConfigViewModel(_service, SetWindowLayerState);
                     createdMovie = _layer.LoadMovie("EquipmentConfigWindow", createdViewModel);
                     _viewModel = createdViewModel;
                     _movie = createdMovie;
@@ -223,22 +230,7 @@ namespace CompanionGearUpgrades.UI
 
         private void SetLayerInteraction(bool isModal)
         {
-            if (_layer == null || _isLayerModal == isModal)
-                return;
-
-            _isLayerModal = isModal;
-            if (isModal)
-            {
-                _layer.InputRestrictions.SetInputRestrictions(true, InputUsageMask.All);
-                _layer.IsFocusLayer = true;
-                ScreenManager.TrySetFocus(_layer);
-            }
-            else
-            {
-                _layer.IsFocusLayer = false;
-                _layer.InputRestrictions.ResetInputRestrictions();
-                ScreenManager.TryLoseFocus(_layer);
-            }
+            GauntletModalLayerInteraction.SetModal(_layer, ref _isLayerModal, isModal);
         }
 
         private void OnGauntletTick()
@@ -264,29 +256,15 @@ namespace CompanionGearUpgrades.UI
                 return;
             }
 
-            ItemTableauWidget previewHost = GetPreviewHost();
-            bool isHostReady = previewHost != null &&
-                previewHost.ConnectedToRoot &&
-                previewHost.IsRecursivelyVisible() &&
-                previewHost.TextureProvider != null;
-            bool isTextureReady = isHostReady &&
-                previewHost.Texture != null &&
-                previewHost.Texture.IsValid;
+            bool isHostReady;
+            bool isTextureReady;
+            ItemPreviewHostProbe.GetState(
+                _layer,
+                "CGUPreviewTableau",
+                out isHostReady,
+                out isTextureReady);
 
             _viewModel?.OnGauntletTick(isHostReady, isTextureReady);
-        }
-
-        private ItemTableauWidget GetPreviewHost()
-        {
-            Widget root = _layer?.UIContext?.Root;
-            if (root == null)
-                return null;
-
-            var previewWidgets = root.FindChildrenWithId<ItemTableauWidget>("CGUPreviewTableau", true);
-            if (previewWidgets == null || previewWidgets.Count == 0)
-                return null;
-
-            return previewWidgets[0];
         }
 
         private void ReleaseConfigurationMovie()

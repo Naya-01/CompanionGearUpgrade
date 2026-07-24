@@ -13,6 +13,8 @@ namespace CompanionGearUpgrades.UI
     /// </summary>
     public sealed class GearItemTooltipViewModel : ViewModel
     {
+        private const int PropertyLabelWidth = 25;
+
         private readonly MBBindingList<ItemMenuTooltipPropertyVM> _properties =
             new MBBindingList<ItemMenuTooltipPropertyVM>();
         private ItemImageIdentifierVM _imageIdentifier;
@@ -108,7 +110,7 @@ namespace CompanionGearUpgrades.UI
             _properties.Add(new ItemMenuTooltipPropertyVM(
                 label,
                 value,
-                25,
+                PropertyLabelWidth,
                 false,
                 null,
                 string.Empty,

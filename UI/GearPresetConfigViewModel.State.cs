@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 using TaleWorlds.Core;
 using TaleWorlds.Library;
-using TaleWorlds.ObjectSystem;
 
 namespace CompanionGearUpgrades.UI
 {
@@ -64,20 +63,13 @@ namespace CompanionGearUpgrades.UI
         {
             if (!CanAddRole)
             {
-                StatusText = "The 10 role limit has been reached.";
-                return;
-            }
-
-            string name = (text ?? string.Empty).Trim();
-            if (string.IsNullOrWhiteSpace(name))
-            {
-                StatusText = "A role name is required.";
+                StatusText = $"The {GearPresetRepository.MaxRoleCount} role limit has been reached.";
                 return;
             }
 
             GearRoleDefinition role;
             string error;
-            if (!_service.TryCreateCustomRoleDraft(name, GetStagedRoleDefinitions(), out role, out error) || role == null)
+            if (!_service.TryCreateCustomRoleDraft(text, GetStagedRoleDefinitions(), out role, out error) || role == null)
             {
                 StatusText = string.IsNullOrEmpty(error)
                     ? "That role name is already in use."
@@ -155,30 +147,8 @@ namespace CompanionGearUpgrades.UI
                 }
             }
 
-            roles.Sort(CompareDefaultRoles);
             roles.AddRange(_customRoles);
             return roles;
-        }
-
-        private static int CompareDefaultRoles(GearRoleDefinition left, GearRoleDefinition right)
-        {
-            int leftOrder = GetDefaultRoleOrder(left != null ? left.Id : null);
-            int rightOrder = GetDefaultRoleOrder(right != null ? right.Id : null);
-            int order = leftOrder.CompareTo(rightOrder);
-            return order != 0
-                ? order
-                : string.Compare(left != null ? left.Name : null, right != null ? right.Name : null, StringComparison.Ordinal);
-        }
-
-        private static int GetDefaultRoleOrder(string roleId)
-        {
-            if (string.Equals(roleId, "Archer", StringComparison.Ordinal))
-                return 0;
-            if (string.Equals(roleId, "Infantry", StringComparison.Ordinal))
-                return 1;
-            if (string.Equals(roleId, "Lancer", StringComparison.Ordinal))
-                return 2;
-            return 3;
         }
 
         private bool ContainsStagedRole(string roleId)
@@ -301,7 +271,7 @@ namespace CompanionGearUpgrades.UI
         private string GetSlotLabel(EquipmentIndex slot)
         {
             string id = GetWorkingSlotId(slot);
-            ItemObject item = string.IsNullOrEmpty(id) ? null : FindItem(id);
+            ItemObject item = GearItemCatalog.FindById(id);
             string itemName = item != null ? item.Name.ToString() : "(empty)";
             return $"{GetSlotName(slot)}: {itemName}";
         }
@@ -327,33 +297,6 @@ namespace CompanionGearUpgrades.UI
             }
 
             return null;
-        }
-
-        private static ItemObject FindItem(string id)
-        {
-            return string.IsNullOrEmpty(id)
-                ? null
-                : MBObjectManager.Instance.GetObject<ItemObject>(id);
-        }
-
-        private static bool SnapshotsEqual(GearPresetSnapshot left, GearPresetSnapshot right)
-        {
-            if (ReferenceEquals(left, right))
-                return true;
-            if (left == null || right == null || left.Cost != right.Cost)
-                return false;
-
-            foreach (EquipmentIndex slot in GearPresetOverrides.EditableSlots)
-            {
-                string leftId;
-                string rightId;
-                bool hasLeft = left.Slots.TryGetValue(slot, out leftId);
-                bool hasRight = right.Slots.TryGetValue(slot, out rightId);
-                if (hasLeft != hasRight || !string.Equals(leftId, rightId, StringComparison.Ordinal))
-                    return false;
-            }
-
-            return true;
         }
 
         private void CloseConfiguration()
@@ -504,7 +447,7 @@ namespace CompanionGearUpgrades.UI
 
             GearPresetTransferDocument document;
             string error;
-            if (!TryReadAndValidateTransferDocument(path, out document, out error))
+            if (!GearPresetTransferJson.TryRead(path, out document, out error))
             {
                 StatusText = string.IsNullOrEmpty(error)
                     ? "The selected JSON file is not a valid preset export."
@@ -532,20 +475,6 @@ namespace CompanionGearUpgrades.UI
             }
 
             StartPendingImport(document);
-        }
-
-        private bool TryReadAndValidateTransferDocument(
-            string path,
-            out GearPresetTransferDocument document,
-            out string error)
-        {
-            document = null;
-            error = null;
-
-            if (!GearPresetTransferJson.TryRead(path, out document, out error))
-                return false;
-
-            return GearPresetTransferJson.Validate(document, out error);
         }
 
         private void StartPendingImport(GearPresetTransferDocument document)
@@ -738,7 +667,7 @@ namespace CompanionGearUpgrades.UI
                 return false;
             }
 
-            for (int copyNumber = 1; copyNumber <= 1000; copyNumber++)
+            for (int copyNumber = 1; copyNumber <= MaximumImportCopyNameAttempts; copyNumber++)
             {
                 string suffix = copyNumber == 1 ? " (copy)" : $" (copy {copyNumber})";
                 string candidateName = baseName + suffix;
@@ -911,7 +840,7 @@ namespace CompanionGearUpgrades.UI
                 return null;
 
             var visibleIds = new List<string>();
-            int count = Math.Min(missingItemIds.Count, 5);
+            int count = Math.Min(missingItemIds.Count, MaximumVisibleMissingItemIds);
             for (int index = 0; index < count; index++)
             {
                 string itemId = missingItemIds[index];

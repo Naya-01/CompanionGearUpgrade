@@ -9,7 +9,6 @@ using TaleWorlds.CampaignSystem.Roster;
 using TaleWorlds.Core;
 using TaleWorlds.Library;
 using TaleWorlds.Localization;
-using TaleWorlds.ObjectSystem;
 
 namespace CompanionGearUpgrades.Services
 {
@@ -94,7 +93,7 @@ namespace CompanionGearUpgrades.Services
                 return false;
             }
 
-            if (customRoleCount >= GearPresetRepository.MaxRoleCount - GearPresetRepository.DefaultRoleCount)
+            if (customRoleCount >= GearPresetRepository.MaxCustomRoleCount)
             {
                 error = $"You can create at most {GearPresetRepository.MaxRoleCount} roles.";
                 return false;
@@ -214,7 +213,9 @@ namespace CompanionGearUpgrades.Services
         /// </summary>
         public bool CanPlayerAffordPreset(int cost)
         {
-            return cost >= 0 && Hero.MainHero != null && Hero.MainHero.Gold >= cost;
+            return GearPresetPricePolicy.IsValid(cost) &&
+                Hero.MainHero != null &&
+                Hero.MainHero.Gold >= cost;
         }
 
         /// <summary>
@@ -245,8 +246,8 @@ namespace CompanionGearUpgrades.Services
                 return false;
             }
 
-            cost = _overrides.GetEffectiveCost(roleId, tier, preset.Cost);
             snapshot = BuildEffectiveSnapshot(roleId, tier, preset);
+            cost = snapshot.Cost;
             return true;
         }
 
@@ -293,6 +294,92 @@ namespace CompanionGearUpgrades.Services
         public GearPresetSnapshot BuildEffectiveSnapshot(string roleId, int tier, GearPreset defaultPreset)
         {
             return _overrides.CaptureSnapshot(roleId, tier, defaultPreset);
+        }
+
+        public GearPresetSnapshot GetDefaultSnapshotOrNull(string roleId, int tier)
+        {
+            GearPreset defaultPreset = GetDefaultPresetOrNull(roleId, tier);
+            return defaultPreset == null
+                ? null
+                : new GearPresetSnapshot(defaultPreset.Cost, defaultPreset.Slots);
+        }
+
+        /// <summary>
+        /// Keeps persistence behind the service boundary so Gauntlet and any
+        /// future editing flow share the same preset resolution and commit path.
+        /// </summary>
+        public bool TryCommitPresetSnapshot(
+            string roleId,
+            int tier,
+            GearPresetSnapshot snapshot,
+            out string error)
+        {
+            error = null;
+            if (!IsRoleAvailableForApplication(roleId))
+            {
+                error = "The edited role no longer exists.";
+                return false;
+            }
+
+            GearPreset defaultPreset = GetDefaultPresetOrNull(roleId, tier);
+            if (defaultPreset == null || snapshot == null)
+            {
+                error = "The selected preset is not available.";
+                return false;
+            }
+
+            _overrides.CommitSnapshot(roleId, tier, defaultPreset, snapshot);
+            return true;
+        }
+
+        /// <summary>
+        /// Calculates the configured equipment value without letting the UI
+        /// access Bannerlord's global object registry directly.
+        /// </summary>
+        public bool TryCalculatePresetPrice(
+            GearPresetSnapshot snapshot,
+            out int calculatedPrice,
+            out string error)
+        {
+            calculatedPrice = 0;
+            error = null;
+
+            if (snapshot == null || snapshot.Slots == null)
+            {
+                error = "The current tier is not available.";
+                return false;
+            }
+
+            if (!GearItemCatalog.IsAvailable)
+            {
+                error = "Cannot calculate price: the game item catalogue is unavailable.";
+                return false;
+            }
+
+            long total = 0;
+            foreach (EquipmentIndex slot in GearSlotCatalog.EditableSlots)
+            {
+                string itemId;
+                if (!snapshot.Slots.TryGetValue(slot, out itemId) || string.IsNullOrEmpty(itemId))
+                    continue;
+
+                ItemObject item = GearItemCatalog.FindById(itemId);
+                if (item == null)
+                {
+                    error = $"Cannot calculate price: configured item '{itemId}' is unavailable.";
+                    return false;
+                }
+
+                total += item.Value;
+                if (total > int.MaxValue)
+                {
+                    error = "Calculated equipment value is too high.";
+                    return false;
+                }
+            }
+
+            calculatedPrice = (int)total;
+            return true;
         }
 
         /// <summary>
@@ -343,7 +430,7 @@ namespace CompanionGearUpgrades.Services
 
                     GearPresetSnapshot snapshot = BuildEffectiveSnapshot(role.Id, tier, defaultPreset);
                     var slots = new Dictionary<string, string>(StringComparer.Ordinal);
-                    foreach (EquipmentIndex slot in GearPresetOverrides.EditableSlots)
+                    foreach (EquipmentIndex slot in GearSlotCatalog.EditableSlots)
                     {
                         string itemId;
                         snapshot.Slots.TryGetValue(slot, out itemId);
@@ -393,6 +480,12 @@ namespace CompanionGearUpgrades.Services
             if (configurationsByTargetRoleId == null || configurationsByTargetRoleId.Count == 0)
             {
                 error = "There are no role configurations to import.";
+                return false;
+            }
+
+            if (!GearItemCatalog.IsAvailable)
+            {
+                error = "The game item catalogue is not available for import.";
                 return false;
             }
 
@@ -539,8 +632,8 @@ namespace CompanionGearUpgrades.Services
             foreach (GearPresetTransferTier transferTier in transferRole.Tiers)
             {
                 if (transferTier == null || !GearPresetRepository.IsValidTier(transferTier.Tier) ||
-                    transferTier.Price < 0 || transferTier.Slots == null ||
-                    transferTier.Slots.Count != GearPresetOverrides.EditableSlots.Length ||
+                    !GearPresetPricePolicy.IsValid(transferTier.Price) || transferTier.Slots == null ||
+                    transferTier.Slots.Count != GearSlotCatalog.EditableSlots.Count ||
                     tiersByNumber.ContainsKey(transferTier.Tier))
                 {
                     error = "An imported tier is invalid.";
@@ -561,7 +654,7 @@ namespace CompanionGearUpgrades.Services
                 }
 
                 var slots = new Dictionary<EquipmentIndex, string>();
-                foreach (EquipmentIndex slot in GearPresetOverrides.EditableSlots)
+                foreach (EquipmentIndex slot in GearSlotCatalog.EditableSlots)
                     slots.Add(slot, null);
 
                 var assignedSlots = new HashSet<EquipmentIndex>();
@@ -588,7 +681,7 @@ namespace CompanionGearUpgrades.Services
                         return false;
                     }
 
-                    ItemObject item = MBObjectManager.Instance.GetObject<ItemObject>(itemId);
+                    ItemObject item = GearItemCatalog.FindById(itemId);
                     if (item == null)
                     {
                         // A third-party item's absence is a warning, not a
@@ -600,7 +693,7 @@ namespace CompanionGearUpgrades.Services
                         continue;
                     }
 
-                    if (!GetAllowedItemTypesForSlot(slot).Contains(item.ItemType))
+                    if (!GearSlotCatalog.IsItemTypeAllowed(slot, item.ItemType))
                     {
                         error = "An imported item is not compatible with its target slot.";
                         return false;
@@ -610,7 +703,7 @@ namespace CompanionGearUpgrades.Services
                     importedItemCount++;
                 }
 
-                if (assignedSlots.Count != GearPresetOverrides.EditableSlots.Length)
+                if (assignedSlots.Count != GearSlotCatalog.EditableSlots.Count)
                 {
                     error = "Each imported tier must explicitly include every editable slot.";
                     return false;
@@ -697,23 +790,19 @@ namespace CompanionGearUpgrades.Services
 
         public List<ItemObject> GetCompatibleItems(EquipmentIndex slot)
         {
-            HashSet<ItemObject.ItemTypeEnum> allowed = GetAllowedItemTypesForSlot(slot);
-            var list = new List<ItemObject>();
-
-            foreach (ItemObject item in MBObjectManager.Instance.GetObjectTypeList<ItemObject>())
-            {
-                if (item == null || string.IsNullOrEmpty(item.StringId) || !allowed.Contains(item.ItemType))
-                    continue;
-
-                list.Add(item);
-            }
-
-            return list;
+            return GearItemCatalog.GetCompatibleItems(slot);
         }
 
         private bool TryBuildEquipmentAndMoveOldItemsToInventory(Hero target, GearPresetSnapshot preset, out Equipment equipment, out string error)
         {
             error = null;
+            if (!GearItemCatalog.IsAvailable)
+            {
+                equipment = null;
+                error = "[CGU] The game item catalogue is not available.";
+                return false;
+            }
+
             equipment = target.BattleEquipment.Clone();
 
             MobileParty mainParty = MobileParty.MainParty;
@@ -722,13 +811,13 @@ namespace CompanionGearUpgrades.Services
 
             // Resolve every configured item before changing the roster. A bad
             // StringId must not leave half of an upgrade applied.
-            foreach (EquipmentIndex slot in GearPresetOverrides.EditableSlots)
+            foreach (EquipmentIndex slot in GearSlotCatalog.EditableSlots)
             {
                 string itemId;
                 if (!preset.Slots.TryGetValue(slot, out itemId) || string.IsNullOrEmpty(itemId))
                     continue;
 
-                ItemObject item = MBObjectManager.Instance.GetObject<ItemObject>(itemId);
+                ItemObject item = GearItemCatalog.FindById(itemId);
                 if (item == null)
                 {
                     error = $"[CGU] Item not found: '{itemId}'. Check the ID (vanilla/War Sails/mods).";
@@ -739,7 +828,7 @@ namespace CompanionGearUpgrades.Services
                 resolvedItems[slot] = item;
             }
 
-            foreach (EquipmentIndex slot in GearPresetOverrides.EditableSlots)
+            foreach (EquipmentIndex slot in GearSlotCatalog.EditableSlots)
             {
                 ItemObject item;
                 resolvedItems.TryGetValue(slot, out item);
@@ -774,41 +863,6 @@ namespace CompanionGearUpgrades.Services
             }
 
             return true;
-        }
-
-        private static HashSet<ItemObject.ItemTypeEnum> GetAllowedItemTypesForSlot(EquipmentIndex slot)
-        {
-            switch (slot)
-            {
-                case EquipmentIndex.Head:
-                    return new HashSet<ItemObject.ItemTypeEnum> { ItemObject.ItemTypeEnum.HeadArmor };
-                case EquipmentIndex.Body:
-                    return new HashSet<ItemObject.ItemTypeEnum> { ItemObject.ItemTypeEnum.BodyArmor };
-                case EquipmentIndex.Cape:
-                    return new HashSet<ItemObject.ItemTypeEnum> { ItemObject.ItemTypeEnum.Cape };
-                case EquipmentIndex.Gloves:
-                    return new HashSet<ItemObject.ItemTypeEnum> { ItemObject.ItemTypeEnum.HandArmor };
-                case EquipmentIndex.Leg:
-                    return new HashSet<ItemObject.ItemTypeEnum> { ItemObject.ItemTypeEnum.LegArmor };
-                case EquipmentIndex.Horse:
-                    return new HashSet<ItemObject.ItemTypeEnum> { ItemObject.ItemTypeEnum.Horse };
-                case EquipmentIndex.HorseHarness:
-                    return new HashSet<ItemObject.ItemTypeEnum> { ItemObject.ItemTypeEnum.HorseHarness };
-                default:
-                    return new HashSet<ItemObject.ItemTypeEnum>
-                    {
-                        ItemObject.ItemTypeEnum.OneHandedWeapon,
-                        ItemObject.ItemTypeEnum.TwoHandedWeapon,
-                        ItemObject.ItemTypeEnum.Polearm,
-                        ItemObject.ItemTypeEnum.Bow,
-                        ItemObject.ItemTypeEnum.Crossbow,
-                        ItemObject.ItemTypeEnum.Thrown,
-                        ItemObject.ItemTypeEnum.Shield,
-                        ItemObject.ItemTypeEnum.Arrows,
-                        ItemObject.ItemTypeEnum.Bolts,
-                        ItemObject.ItemTypeEnum.Banner
-                    };
-            }
         }
     }
 

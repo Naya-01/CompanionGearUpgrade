@@ -1,6 +1,8 @@
 ﻿using CompanionGearUpgrades.Behaviors;
 using CompanionGearUpgrades.Data;
+using CompanionGearUpgrades.Domain;
 using CompanionGearUpgrades.Services;
+using System.Collections.Generic;
 using TaleWorlds.CampaignSystem;
 using TaleWorlds.Library;
 using TaleWorlds.Localization;
@@ -12,16 +14,7 @@ namespace CompanionGearUpgrades.Dialog
         // Dialogues are registered only once when the campaign starts. Reserve
         // the seven possible custom-role entries up front, then decide whether
         // each entry is visible from the current persisted role catalog.
-        private static readonly string[] CustomRoleTextVariables =
-        {
-            "CGU_CUSTOM_ROLE_1",
-            "CGU_CUSTOM_ROLE_2",
-            "CGU_CUSTOM_ROLE_3",
-            "CGU_CUSTOM_ROLE_4",
-            "CGU_CUSTOM_ROLE_5",
-            "CGU_CUSTOM_ROLE_6",
-            "CGU_CUSTOM_ROLE_7"
-        };
+        private static readonly string[] CustomRoleTextVariables = CreateCustomRoleTextVariables();
 
         private readonly CompanionGearUpgradeService _service;
         private string _selectedRoleId;
@@ -29,6 +22,15 @@ namespace CompanionGearUpgrades.Dialog
         public CompanionGearUpgradeDialog(CompanionGearUpgradeService service)
         {
             _service = service;
+        }
+
+        private static string[] CreateCustomRoleTextVariables()
+        {
+            var variables = new string[GearPresetRepository.MaxCustomRoleCount];
+            for (int index = 0; index < variables.Length; index++)
+                variables[index] = "CGU_CUSTOM_ROLE_" + (index + 1);
+
+            return variables;
         }
 
         private static void OpenPresetConfiguration()
@@ -60,27 +62,11 @@ namespace CompanionGearUpgrades.Dialog
 
         private GearRoleDefinition GetCustomRoleForDialogSlot(int slotIndex)
         {
-            if (slotIndex < 0)
+            IReadOnlyList<GearRoleDefinition> customRoles = _service.GetCustomRoles();
+            if (slotIndex < 0 || customRoles == null || slotIndex >= customRoles.Count)
                 return null;
 
-            int customRoleIndex = 0;
-            foreach (GearRoleDefinition role in _service.GetRoleDefinitions())
-            {
-                if (role == null ||
-                    role.IsDefaultRole ||
-                    string.IsNullOrWhiteSpace(role.Id) ||
-                    string.IsNullOrWhiteSpace(role.Name))
-                {
-                    continue;
-                }
-
-                if (customRoleIndex == slotIndex)
-                    return role;
-
-                customRoleIndex++;
-            }
-
-            return null;
+            return customRoles[slotIndex];
         }
 
         private bool CanShowCustomRoleDialogSlot(int slotIndex, string textVariable)
@@ -138,7 +124,7 @@ namespace CompanionGearUpgrades.Dialog
                 "cgu_tier_npc",
                 "{=cgu_role_infantry}Soldier (infantry)",
                 () => true,
-                () => _selectedRoleId = "Infantry");
+                () => _selectedRoleId = GearPresetRepository.GetRoleId(GearRole.Infantry));
 
             starter.AddPlayerLine(
                 "cgu_role_archer",
@@ -146,7 +132,7 @@ namespace CompanionGearUpgrades.Dialog
                 "cgu_tier_npc",
                 "{=cgu_role_archer}Archer",
                 () => true,
-                () => _selectedRoleId = "Archer");
+                () => _selectedRoleId = GearPresetRepository.GetRoleId(GearRole.Archer));
 
             starter.AddPlayerLine(
                 "cgu_role_lancer",
@@ -154,7 +140,7 @@ namespace CompanionGearUpgrades.Dialog
                 "cgu_tier_npc",
                 "{=cgu_role_lancer}Lancer (cavalry)",
                 () => true,
-                () => _selectedRoleId = "Lancer");
+                () => _selectedRoleId = GearPresetRepository.GetRoleId(GearRole.Lancer));
 
             for (int customRoleSlot = 0; customRoleSlot < CustomRoleTextVariables.Length; customRoleSlot++)
             {

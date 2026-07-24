@@ -183,7 +183,7 @@ EquipmentIndex → ItemObject.StringId
 
 Les presets d’origine ne sont pas modifiés pendant l’édition. La vue travaille sur `GearPresetSnapshot`, qui copie le coût et le dictionnaire de slots ; `Clone()` garantit que la référence sauvegardée ne peut pas être altérée par une action temporaire.
 
-Les slots éditables sont définis une seule fois par `GearPresetOverrides.EditableSlots` :
+Les slots éditables, leurs noms de transfert stables, leurs groupes et leurs types compatibles sont définis une seule fois par `GearSlotCatalog` :
 
 ```text
 Weapon0, Weapon1, Weapon2, Weapon3,
@@ -312,17 +312,7 @@ Le dialogue et l’UI ne découvrent pas automatiquement un quatrième tier ; ce
 
 ### Ajouter un slot ou une catégorie
 
-Pour ajouter un **slot**, mettez à jour simultanément :
-
-1. `GearPresetOverrides.EditableSlots` ;
-2. `GetSlotsForCategory(...)` ;
-3. `GetSlotName(...)` ;
-4. `CompanionGearUpgradeService.GetAllowedItemTypesForSlot(...)` ;
-5. les presets par défaut ;
-6. la persistance `null` / marqueur vide ;
-7. les tests d’un slot vide.
-
-Le service d’application parcourt déjà `GearPresetOverrides.EditableSlots` : ajouter le slot à ce tableau couvre automatiquement capture, commit et application. Le mapping des types compatibles doit toutefois être ajouté explicitement.
+Pour ajouter un **slot**, définissez une seule fois son ordre, son nom JSON stable, son groupe et son type compatible dans `GearSlotCatalog`, puis adaptez les presets par défaut et les tests de slot vide. Le schéma v1 exigeant explicitement chaque slot pris en charge, modifier cet ensemble impose aussi une nouvelle version volontaire du schéma de transfert.
 
 Pour ajouter une **catégorie**, ajoutez aussi :
 

@@ -15,21 +15,6 @@ namespace CompanionGearUpgrades.Data
         // distinguishable from having no override (which means "use default").
         private const string EmptySlotMarker = "__CGU_EMPTY_SLOT__";
 
-        internal static readonly EquipmentIndex[] EditableSlots =
-        {
-            EquipmentIndex.Weapon0,
-            EquipmentIndex.Weapon1,
-            EquipmentIndex.Weapon2,
-            EquipmentIndex.Weapon3,
-            EquipmentIndex.Head,
-            EquipmentIndex.Body,
-            EquipmentIndex.Cape,
-            EquipmentIndex.Gloves,
-            EquipmentIndex.Leg,
-            EquipmentIndex.Horse,
-            EquipmentIndex.HorseHarness
-        };
-
         private readonly Dictionary<string, int> _costOverrides;
         private readonly Dictionary<string, string> _itemOverrides;
 
@@ -69,7 +54,7 @@ namespace CompanionGearUpgrades.Data
 
         private void SetCostOverride(string roleId, int tier, int cost)
         {
-            _costOverrides[CostKey(roleId, tier)] = Math.Max(0, cost);
+            _costOverrides[CostKey(roleId, tier)] = GearPresetPricePolicy.NormalizeForStorage(cost);
         }
 
         private void ClearCostOverride(string roleId, int tier)
@@ -105,7 +90,7 @@ namespace CompanionGearUpgrades.Data
                 throw new ArgumentNullException(nameof(defaultPreset));
 
             var merged = new Dictionary<EquipmentIndex, string>(defaultPreset.Slots);
-            foreach (EquipmentIndex slot in EditableSlots)
+            foreach (EquipmentIndex slot in GearSlotCatalog.EditableSlots)
             {
                 string id;
                 if (TryGetOverrideItemId(roleId, tier, slot, out id))
@@ -138,7 +123,7 @@ namespace CompanionGearUpgrades.Data
             // Item overrides: only store diffs from default. An empty value is
             // persisted explicitly; clearing the dictionary entry would make
             // the default item silently come back on the next upgrade.
-            foreach (EquipmentIndex slot in EditableSlots)
+            foreach (EquipmentIndex slot in GearSlotCatalog.EditableSlots)
             {
                 string defaultId;
                 defaultPreset.Slots.TryGetValue(slot, out defaultId);
