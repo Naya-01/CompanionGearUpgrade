@@ -118,6 +118,8 @@
     <Compile Include="SubModule.cs" />
     <Compile Include="UI\ClanEquipmentTabExtension.cs" />
     <Compile Include="UI\ClanEquipmentTabHarmonyPatch.cs" />
+    <Compile Include="UI\ApplyGearPresetView.cs" />
+    <Compile Include="UI\ApplyGearPresetViewModel.cs" />
     <Compile Include="UI\EquipmentConfigGlobalLayer.cs" />
     <Compile Include="UI\EquipmentConfigView.cs" />
     <Compile Include="UI\GearPresetConfigTypes.cs" />
@@ -128,6 +130,8 @@
     <Compile Include="UI\GearPresetConfigViewModel.State.cs" />
     <Compile Include="UI\GearPresetConfigViewModel.cs" />
     <Compile Include="UI\ViewModels\GearCategoryOptionViewModel.cs" />
+    <Compile Include="UI\ViewModels\ApplyGearPresetEquipmentOptionViewModel.cs" />
+    <Compile Include="UI\ViewModels\ApplyGearPresetRoleOptionViewModel.cs" />
     <Compile Include="UI\ViewModels\GearItemFilterOptionViewModel.cs" />
     <Compile Include="UI\ViewModels\GearItemOptionViewModel.cs" />
     <Compile Include="UI\ViewModels\GearItemSortOptionViewModel.cs" />
@@ -137,8 +141,10 @@
     <Compile Include="UI\ViewModels\GearTierOptionViewModel.cs" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="GUI\Prefabs\ApplyGearPresetWindow.xml" />
     <Content Include="GUI\Prefabs\EquipmentConfigWindow.xml" />
     <Content Include="SubModule.xml" />
+    <Content Include="GUI\PrefabExtensions\ClanCompanionGearPresetButton.xml" />
     <Content Include="GUI\PrefabExtensions\ClanEquipmentTab.xml" />
   </ItemGroup>
   <ItemGroup>

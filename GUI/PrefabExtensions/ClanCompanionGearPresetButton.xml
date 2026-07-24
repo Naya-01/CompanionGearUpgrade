@@ -1,0 +1,6 @@
+<ButtonWidget Id="CGU_ApplyGearPresetButton" DoNotPassEventsToChildren="true" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="34" SuggestedHeight="34" VerticalAlignment="Center" MarginLeft="5" MarginRight="5" Brush="Inventory.Tuple.Extension.SpecialButton" Command.Click="ExecuteApplyGearPreset" IsVisible="@IsGearPresetApplyVisible" IsEnabled="@IsGearPresetApplyEnabled" UpdateChildrenStates="true">
+  <Children>
+    <ImageWidget DoNotAcceptEvents="true" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="22" SuggestedHeight="22" HorizontalAlignment="Center" VerticalAlignment="Center" Brush="Inventory.Tuple.Extension.EquipButtonIcon" />
+    <HintWidget DoNotAcceptEvents="true" DataSource="{GearPresetApplyHint}" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Command.HoverBegin="ExecuteBeginHint" Command.HoverEnd="ExecuteEndHint" />
+  </Children>
+</ButtonWidget>

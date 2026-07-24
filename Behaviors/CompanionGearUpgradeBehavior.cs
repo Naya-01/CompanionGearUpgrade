@@ -17,6 +17,7 @@ namespace CompanionGearUpgrades.Behaviors
         // rebuilt when the campaign session starts.
         private Dictionary<string, string> _customRoleNames;
         private static EquipmentConfigView _equipmentConfigView;
+        private static ApplyGearPresetView _applyGearPresetView;
 
         public CompanionGearUpgradeBehavior()
         {
@@ -62,6 +63,9 @@ namespace CompanionGearUpgrades.Behaviors
             // view, service and persisted override store.
             _equipmentConfigView = new EquipmentConfigView(service, overrides);
             _equipmentConfigView.Initialize();
+
+            _applyGearPresetView = new ApplyGearPresetView(service);
+            _applyGearPresetView.Initialize();
         }
 
         public static bool TryOpenClanPresetConfiguration()
@@ -74,8 +78,20 @@ namespace CompanionGearUpgrades.Behaviors
             return _equipmentConfigView != null && _equipmentConfigView.OpenConversationConfiguration();
         }
 
+        /// <summary>
+        /// Opens the dedicated, read-only preset application window for the
+        /// explicitly selected Clan hero. The apply view owns no domain
+        /// mutation; it delegates confirmation to the shared service.
+        /// </summary>
+        public static bool TryOpenClanPresetApplication(Hero target)
+        {
+            return _applyGearPresetView != null && _applyGearPresetView.Open(target);
+        }
+
         public static void ClearPresetConfiguration()
         {
+            _applyGearPresetView?.Dispose();
+            _applyGearPresetView = null;
             _equipmentConfigView?.Dispose();
             _equipmentConfigView = null;
         }

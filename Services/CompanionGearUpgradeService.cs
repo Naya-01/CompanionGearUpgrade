@@ -205,43 +205,102 @@ namespace CompanionGearUpgrades.Services
         public void TryApplyTier(string roleId, int tier)
         {
             Hero target = Hero.OneToOneConversationHero;
-            if (target == null || !(target.IsPlayerCompanion || target.Clan == Clan.PlayerClan))
+            // Preserve the historical conversation behavior: there is simply
+            // no action if the conversation target is no longer eligible.
+            if (!IsHeroEligibleForPresetApplication(target))
                 return;
+
+            GearPresetApplicationResult result = TryApplyTierToHero(target, roleId, tier);
+            if (!string.IsNullOrEmpty(result.Message))
+                InformationManager.DisplayMessage(new InformationMessage(result.Message));
+        }
+
+        /// <summary>
+        /// Returns whether a hero can receive a gear preset. This is shared by
+        /// the conversation and the Clan Gauntlet entry point so they cannot
+        /// drift apart over time.
+        /// </summary>
+        public bool IsHeroEligibleForPresetApplication(Hero target)
+        {
+            return target != null &&
+                (target.IsPlayerCompanion || target.Clan == Clan.PlayerClan);
+        }
+
+        /// <summary>
+        /// Kept in the service so callers do not need to recreate the payer
+        /// rule used by <see cref="TryApplyTierToHero"/>.
+        /// </summary>
+        public bool CanPlayerAffordPreset(int cost)
+        {
+            return cost >= 0 && Hero.MainHero != null && Hero.MainHero.Gold >= cost;
+        }
+
+        /// <summary>
+        /// Returns the persisted snapshot and its current price for a role and
+        /// tier. The returned snapshot is a copy and is safe for UI preview.
+        /// </summary>
+        public bool TryGetPresetForApplication(
+            string roleId,
+            int tier,
+            out GearPresetSnapshot snapshot,
+            out int cost,
+            out string error)
+        {
+            snapshot = null;
+            cost = 0;
+            error = null;
 
             if (!IsRoleAvailableForApplication(roleId))
             {
-                InformationManager.DisplayMessage(new InformationMessage("[CGU] Missing preset."));
-                return;
+                error = "[CGU] Missing preset.";
+                return false;
             }
 
             GearPreset preset = GetDefaultPresetOrNull(roleId, tier);
             if (preset == null)
             {
-                InformationManager.DisplayMessage(new InformationMessage("[CGU] Missing preset."));
-                return;
+                error = "[CGU] Missing preset.";
+                return false;
             }
 
-            int cost = _overrides.GetEffectiveCost(roleId, tier, preset.Cost);
-            if (Hero.MainHero.Gold < cost)
-            {
-                InformationManager.DisplayMessage(new InformationMessage("Not enough gold."));
-                return;
-            }
+            cost = _overrides.GetEffectiveCost(roleId, tier, preset.Cost);
+            snapshot = BuildEffectiveSnapshot(roleId, tier, preset);
+            return true;
+        }
 
-            GearPresetSnapshot eff = BuildEffectiveSnapshot(roleId, tier, preset);
+        /// <summary>
+        /// Applies a preset to an explicit hero. All domain work remains here:
+        /// eligibility, role validation, payment, old-item transfer and
+        /// equipment assignment. UI callers only choose a role and tier.
+        /// </summary>
+        public GearPresetApplicationResult TryApplyTierToHero(Hero target, string roleId, int tier)
+        {
+            if (!IsHeroEligibleForPresetApplication(target))
+                return GearPresetApplicationResult.Failed("[CGU] This companion cannot receive a gear preset.");
+
+            GearPresetSnapshot snapshot;
+            int cost;
+            string error;
+            if (!TryGetPresetForApplication(roleId, tier, out snapshot, out cost, out error))
+                return GearPresetApplicationResult.Failed(error);
+
+            Hero payer = Hero.MainHero;
+            if (payer == null)
+                return GearPresetApplicationResult.Failed(
+                    "[CGU] No player hero is available to pay for this preset.");
+
+            if (!CanPlayerAffordPreset(cost))
+                return GearPresetApplicationResult.Failed("Not enough gold.");
 
             Equipment newEquipment;
-            string error;
-            if (!TryBuildEquipmentAndMoveOldItemsToInventory(target, eff, out newEquipment, out error))
-            {
-                InformationManager.DisplayMessage(new InformationMessage(error));
-                return;
-            }
+            if (!TryBuildEquipmentAndMoveOldItemsToInventory(target, snapshot, out newEquipment, out error))
+                return GearPresetApplicationResult.Failed(error);
 
-            Hero.MainHero.ChangeHeroGold(-cost);
+            payer.ChangeHeroGold(-cost);
             EquipmentHelper.AssignHeroEquipmentFromEquipment(target, newEquipment);
 
-            InformationManager.DisplayMessage(new InformationMessage($"{target.Name}: equipment updated (Tier {tier}) for {cost} gold."));
+            return GearPresetApplicationResult.Succeeded(
+                $"{target.Name}: equipment updated (Tier {tier}) for {cost} gold.");
         }
 
         public GearPresetSnapshot BuildEffectiveSnapshot(GearRole role, int tier, GearPreset defaultPreset)
@@ -648,7 +707,7 @@ namespace CompanionGearUpgrades.Services
         /// conversation must only apply a built-in role or a custom role that
         /// still exists in the persisted catalogue.
         /// </summary>
-        private bool IsRoleAvailableForApplication(string roleId)
+        public bool IsRoleAvailableForApplication(string roleId)
         {
             return GearPresetRepository.IsDefaultRoleId(roleId) ||
                 (GearPresetRepository.IsCustomRoleId(roleId) && _customRoleNames.ContainsKey(roleId));
@@ -768,6 +827,33 @@ namespace CompanionGearUpgrades.Services
                         ItemObject.ItemTypeEnum.Banner
                     };
             }
+        }
+    }
+
+    /// <summary>
+    /// Outcome returned by the shared preset-application workflow. It lets a
+    /// Gauntlet screen present the same success/error feedback as the legacy
+    /// dialogue without reimplementing campaign mutations.
+    /// </summary>
+    public sealed class GearPresetApplicationResult
+    {
+        private GearPresetApplicationResult(bool isSuccess, string message)
+        {
+            IsSuccess = isSuccess;
+            Message = message;
+        }
+
+        public bool IsSuccess { get; private set; }
+        public string Message { get; private set; }
+
+        internal static GearPresetApplicationResult Failed(string message)
+        {
+            return new GearPresetApplicationResult(false, message);
+        }
+
+        internal static GearPresetApplicationResult Succeeded(string message)
+        {
+            return new GearPresetApplicationResult(true, message);
         }
     }
 
