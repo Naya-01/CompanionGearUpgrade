@@ -54,7 +54,7 @@ namespace CompanionGearUpgrades.UI
                 _hero != Hero.MainHero &&
                 _hero.IsPlayerCompanion;
             _gearPresetApplyHint = new HintViewModel(
-                new TextObject("Apply gear preset\nApplique un preset d\u2019\u00e9quipement \u00e0 ce compagnon."),
+                new TextObject("Apply gear preset to this companion."),
                 "CGU.ApplyGearPreset");
         }
 
