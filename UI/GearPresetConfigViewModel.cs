@@ -45,7 +45,7 @@ namespace CompanionGearUpgrades.UI
         private readonly List<GearItemOptionViewModel> _allItems;
         private readonly MBBindingList<GearItemFilterOptionViewModel> _filters;
         private readonly MBBindingList<GearItemSortOptionViewModel> _sortOptions;
-        private ItemPreviewVM _itemPreview;
+        private readonly ItemPreviewSession _previewSession;
         private readonly GearItemTooltipViewModel _inspectionTooltip;
         private readonly GearItemTooltipViewModel _configuredTooltip;
         private ItemObject _inspectedItem;
@@ -62,28 +62,12 @@ namespace CompanionGearUpgrades.UI
         private string _selectedItemTypeFilter;
         private string _itemSearchText;
         private GearItemSortOrder _itemSortOrder;
-        private string _requestedPreviewItemId;
-        private string _openedPreviewItemId;
-        private string _readyPreviewItemId;
-        private int _previewOpenDelayTicks;
-        private int _previewOpenAttempt;
-        private int _previewTextureSettleTicks;
-        private int _previewTextureWaitTicks;
-        private string _previewStateText;
-        private bool _isReleasingPreview;
         private GearItemOptionViewModel _hoveredCandidate;
         private Page _page;
         private bool _isWindowOpen;
         private bool _isHostScreenVisible;
         private bool _hasComparison;
         private string _statusText;
-
-        // Open only after the direct ItemTableauWidget has materialized its
-        // native texture provider in the visible Gauntlet context.
-        private const int PreviewOpenDelayTicks = 1;
-        private const int PreviewTextureSettleTicks = 2;
-        private const int PreviewTextureTimeoutTicks = 30;
-        private const int MaxPreviewOpenAttempts = 3;
 
         public GearPresetConfigViewModel(
             CompanionGearUpgradeService service,
@@ -105,11 +89,16 @@ namespace CompanionGearUpgrades.UI
             _allItems = new List<GearItemOptionViewModel>();
             _filters = new MBBindingList<GearItemFilterOptionViewModel>();
             _sortOptions = new MBBindingList<GearItemSortOptionViewModel>();
-            _itemPreview = new ItemPreviewVM(OnItemPreviewClosed);
+            _previewSession = new ItemPreviewSession(
+                FindItem,
+                CanRetryPreviewAfterClose,
+                NotifyPreviewStateChanged,
+                NotifyPreviewChanged,
+                "Preview will load when an item is selected.",
+                "3D preview is temporarily unavailable. Hover the item again to retry.");
             _inspectionTooltip = new GearItemTooltipViewModel();
             _configuredTooltip = new GearItemTooltipViewModel();
             _itemSortOrder = GearItemSortOrder.ValueAscending;
-            _previewStateText = "Preview will load when an item is selected.";
             _statusText = "Select a role and tier to edit a preset.";
             _page = Page.Roles;
 
@@ -182,7 +171,7 @@ namespace CompanionGearUpgrades.UI
         public MBBindingList<GearItemSortOptionViewModel> SortOptions => _sortOptions;
 
         [DataSourceProperty]
-        public ItemCollectionElementViewModel PreviewTableau => _itemPreview?.ItemTableau;
+        public ItemCollectionElementViewModel PreviewTableau => _previewSession.PreviewTableau;
 
         [DataSourceProperty]
         public GearItemTooltipViewModel InspectionTooltip => _inspectionTooltip;
@@ -191,11 +180,10 @@ namespace CompanionGearUpgrades.UI
         public GearItemTooltipViewModel ConfiguredTooltip => _configuredTooltip;
 
         [DataSourceProperty]
-        public bool HasPreviewItem => !string.IsNullOrEmpty(_readyPreviewItemId) &&
-            string.Equals(_readyPreviewItemId, _requestedPreviewItemId, StringComparison.Ordinal);
+        public bool HasPreviewItem => _previewSession.HasPreviewItem;
 
         [DataSourceProperty]
-        public string PreviewStateText => _previewStateText;
+        public string PreviewStateText => _previewSession.StateText;
 
         [DataSourceProperty]
         public bool HasInspectionItem => _inspectedItem != null;

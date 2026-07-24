@@ -197,24 +197,6 @@ namespace CompanionGearUpgrades.Services
             return false;
         }
 
-        public void TryApplyTier(GearRole role, int tier)
-        {
-            TryApplyTier(GearPresetRepository.GetRoleId(role), tier);
-        }
-
-        public void TryApplyTier(string roleId, int tier)
-        {
-            Hero target = Hero.OneToOneConversationHero;
-            // Preserve the historical conversation behavior: there is simply
-            // no action if the conversation target is no longer eligible.
-            if (!IsHeroEligibleForPresetApplication(target))
-                return;
-
-            GearPresetApplicationResult result = TryApplyTierToHero(target, roleId, tier);
-            if (!string.IsNullOrEmpty(result.Message))
-                InformationManager.DisplayMessage(new InformationMessage(result.Message));
-        }
-
         /// <summary>
         /// Returns whether a hero can receive a gear preset. This is shared by
         /// the conversation and the Clan Gauntlet entry point so they cannot
@@ -228,7 +210,7 @@ namespace CompanionGearUpgrades.Services
 
         /// <summary>
         /// Kept in the service so callers do not need to recreate the payer
-        /// rule used by <see cref="TryApplyTierToHero"/>.
+        /// rule used by <see cref="TryApplyTier(Hero, string, int)"/>.
         /// </summary>
         public bool CanPlayerAffordPreset(int cost)
         {
@@ -273,7 +255,7 @@ namespace CompanionGearUpgrades.Services
         /// eligibility, role validation, payment, old-item transfer and
         /// equipment assignment. UI callers only choose a role and tier.
         /// </summary>
-        public GearPresetApplicationResult TryApplyTierToHero(Hero target, string roleId, int tier)
+        public GearPresetApplicationResult TryApplyTier(Hero target, string roleId, int tier)
         {
             if (!IsHeroEligibleForPresetApplication(target))
                 return GearPresetApplicationResult.Failed("[CGU] This companion cannot receive a gear preset.");

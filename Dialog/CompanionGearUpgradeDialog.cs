@@ -42,8 +42,20 @@ namespace CompanionGearUpgrades.Dialog
 
         private bool IsTalkingToPlayerCompanion()
         {
-            Hero h = Hero.OneToOneConversationHero;
-            return h != null && (h.IsPlayerCompanion || h.Clan == Clan.PlayerClan);
+            return _service.IsHeroEligibleForPresetApplication(Hero.OneToOneConversationHero);
+        }
+
+        private void ApplySelectedTierFromConversation(int tier)
+        {
+            Hero target = Hero.OneToOneConversationHero;
+            // Preserve the historical conversation behavior: if the target
+            // becomes ineligible while the dialogue is open, do nothing.
+            if (!_service.IsHeroEligibleForPresetApplication(target))
+                return;
+
+            GearPresetApplicationResult result = _service.TryApplyTier(target, _selectedRoleId, tier);
+            if (!string.IsNullOrEmpty(result.Message))
+                InformationManager.DisplayMessage(new InformationMessage(result.Message));
         }
 
         private GearRoleDefinition GetCustomRoleForDialogSlot(int slotIndex)
@@ -193,7 +205,7 @@ namespace CompanionGearUpgrades.Dialog
                "cgu_apply_npc",
                "{=cgu_t1}Tier 1 ({COST_T1} gold)",
                () => _service.SetTierCostVar(_selectedRoleId, 1, "COST_T1"),
-               () => _service.TryApplyTier(_selectedRoleId, 1));
+               () => ApplySelectedTierFromConversation(1));
 
             starter.AddPlayerLine(
                 "cgu_tier_2",
@@ -201,7 +213,7 @@ namespace CompanionGearUpgrades.Dialog
                 "cgu_apply_npc",
                 "{=cgu_t2}Tier 2 ({COST_T2} gold)",
                 () => _service.SetTierCostVar(_selectedRoleId, 2, "COST_T2"),
-                () => _service.TryApplyTier(_selectedRoleId, 2));
+                () => ApplySelectedTierFromConversation(2));
 
             starter.AddPlayerLine(
                 "cgu_tier_3",
@@ -209,7 +221,7 @@ namespace CompanionGearUpgrades.Dialog
                 "cgu_apply_npc",
                 "{=cgu_t3}Tier 3 ({COST_T3} gold)",
                 () => _service.SetTierCostVar(_selectedRoleId, 3, "COST_T3"),
-                () => _service.TryApplyTier(_selectedRoleId, 3));
+                () => ApplySelectedTierFromConversation(3));
 
             // NPC "ack" after applying -> return to the main menu
             starter.AddDialogLine(

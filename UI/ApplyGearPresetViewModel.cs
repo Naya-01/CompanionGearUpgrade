@@ -20,17 +20,12 @@ namespace CompanionGearUpgrades.UI
     /// </summary>
     public sealed class ApplyGearPresetViewModel : ViewModel
     {
-        private const int PreviewOpenDelayTicks = 1;
-        private const int PreviewTextureSettleTicks = 2;
-        private const int PreviewTextureTimeoutTicks = 30;
-        private const int MaxPreviewOpenAttempts = 3;
-
         private readonly CompanionGearUpgradeService _service;
         private readonly Action _requestClose;
         private readonly MBBindingList<ApplyGearPresetRoleOptionViewModel> _roles;
         private readonly MBBindingList<GearTierOptionViewModel> _tiers;
         private readonly MBBindingList<ApplyGearPresetEquipmentOptionViewModel> _equipment;
-        private ItemPreviewVM _itemPreview;
+        private readonly ItemPreviewSession _previewSession;
 
         private Hero _target;
         private string _selectedRoleId;
@@ -40,15 +35,6 @@ namespace CompanionGearUpgrades.UI
         private bool _isWindowOpen;
         private string _statusText;
 
-        private string _requestedPreviewItemId;
-        private string _openedPreviewItemId;
-        private string _readyPreviewItemId;
-        private int _previewOpenDelayTicks;
-        private int _previewOpenAttempt;
-        private int _previewTextureSettleTicks;
-        private int _previewTextureWaitTicks;
-        private bool _isReleasingPreview;
-        private string _previewStateText;
         private string _previewItemName;
         private string _previewItemStringId;
 
@@ -61,9 +47,14 @@ namespace CompanionGearUpgrades.UI
             _roles = new MBBindingList<ApplyGearPresetRoleOptionViewModel>();
             _tiers = new MBBindingList<GearTierOptionViewModel>();
             _equipment = new MBBindingList<ApplyGearPresetEquipmentOptionViewModel>();
-            _itemPreview = new ItemPreviewVM(OnItemPreviewClosed);
+            _previewSession = new ItemPreviewSession(
+                FindItem,
+                CanRetryPreviewAfterClose,
+                NotifyPreviewStateChanged,
+                NotifyPreviewChanged,
+                "Choose an equipment slot to preview it in 3D.",
+                "3D preview is temporarily unavailable.");
             _statusText = "Choose a role and tier to preview this companion's upgrade.";
-            _previewStateText = "Choose an equipment slot to preview it in 3D.";
             _previewItemName = "No item selected";
             _previewItemStringId = string.Empty;
         }
@@ -78,7 +69,7 @@ namespace CompanionGearUpgrades.UI
         public MBBindingList<ApplyGearPresetEquipmentOptionViewModel> EquipmentOptions => _equipment;
 
         [DataSourceProperty]
-        public ItemCollectionElementViewModel PreviewTableau => _itemPreview?.ItemTableau;
+        public ItemCollectionElementViewModel PreviewTableau => _previewSession.PreviewTableau;
 
         [DataSourceProperty]
         public bool IsWindowOpen
@@ -186,12 +177,10 @@ namespace CompanionGearUpgrades.UI
         }
 
         [DataSourceProperty]
-        public string PreviewStateText => _previewStateText;
+        public string PreviewStateText => _previewSession.StateText;
 
         [DataSourceProperty]
-        public bool HasPreviewItem =>
-            !string.IsNullOrEmpty(_readyPreviewItemId) &&
-            string.Equals(_readyPreviewItemId, _requestedPreviewItemId, StringComparison.Ordinal);
+        public bool HasPreviewItem => _previewSession.HasPreviewItem;
 
         [DataSourceProperty]
         public string PreviewItemName => _previewItemName;
@@ -274,7 +263,7 @@ namespace CompanionGearUpgrades.UI
                 return;
             }
 
-            GearPresetApplicationResult result = _service.TryApplyTierToHero(
+            GearPresetApplicationResult result = _service.TryApplyTier(
                 _target,
                 _selectedRoleId,
                 _selectedTier);
@@ -313,48 +302,7 @@ namespace CompanionGearUpgrades.UI
         /// </summary>
         public void OnGauntletTick(bool isPreviewHostReady, bool isPreviewTextureReady)
         {
-            if (!IsWindowOpen || _itemPreview == null || string.IsNullOrEmpty(_requestedPreviewItemId))
-                return;
-
-            if (!isPreviewHostReady)
-            {
-                SetPreviewState("Preparing the 3D preview context...");
-                return;
-            }
-
-            if (string.Equals(_openedPreviewItemId, _requestedPreviewItemId, StringComparison.Ordinal))
-            {
-                if (string.Equals(_readyPreviewItemId, _requestedPreviewItemId, StringComparison.Ordinal))
-                    return;
-
-                if (_previewTextureSettleTicks > 0)
-                {
-                    _previewTextureSettleTicks--;
-                    return;
-                }
-
-                if (isPreviewTextureReady)
-                {
-                    _readyPreviewItemId = _requestedPreviewItemId;
-                    SetPreviewState("3D preview ready.");
-                    NotifyPreviewChanged();
-                    return;
-                }
-
-                _previewTextureWaitTicks++;
-                if (_previewTextureWaitTicks >= PreviewTextureTimeoutTicks)
-                    SchedulePreviewRetryOrReportFailure();
-                return;
-            }
-
-            if (_previewOpenDelayTicks > 0)
-            {
-                _previewOpenDelayTicks--;
-                return;
-            }
-
-            if (_previewOpenAttempt < MaxPreviewOpenAttempts)
-                OpenRequestedPreview();
+            _previewSession.Tick(IsWindowOpen, isPreviewHostReady, isPreviewTextureReady);
         }
 
         /// <summary>
@@ -531,157 +479,30 @@ namespace CompanionGearUpgrades.UI
             OnPropertyChanged(nameof(PreviewItemName));
             OnPropertyChanged(nameof(PreviewItemStringId));
 
-            string itemId = item == null ? null : item.StringId;
-            if (string.Equals(_requestedPreviewItemId, itemId, StringComparison.Ordinal) &&
-                (!string.IsNullOrEmpty(_openedPreviewItemId) || _previewOpenDelayTicks > 0))
-            {
-                return;
-            }
-
-            _requestedPreviewItemId = itemId;
-            _openedPreviewItemId = null;
-            _readyPreviewItemId = null;
-            _previewOpenAttempt = 0;
-            _previewTextureSettleTicks = 0;
-            _previewTextureWaitTicks = 0;
-
-            if (item == null)
-            {
-                _previewOpenDelayTicks = 0;
-                CloseAndClearNativePreview();
-                SetPreviewState(option != null && option.IsUnavailable
+            _previewSession.SetItem(
+                item,
+                option != null && option.IsUnavailable
                     ? "This item is unavailable for 3D preview."
                     : "This equipment slot is empty.");
-                NotifyPreviewChanged();
-                return;
-            }
-
-            _previewOpenDelayTicks = PreviewOpenDelayTicks;
-            SetPreviewState("Loading 3D preview...");
-            NotifyPreviewChanged();
-        }
-
-        private void OpenRequestedPreview()
-        {
-            ItemObject item = FindItem(_requestedPreviewItemId);
-            if (item == null)
-            {
-                SetPreviewState("The selected item is no longer available for preview.");
-                NotifyPreviewChanged();
-                return;
-            }
-
-            try
-            {
-                _previewOpenAttempt++;
-                ClearNativePreviewTableau();
-                _itemPreview.Open(new EquipmentElement(item));
-                _openedPreviewItemId = _requestedPreviewItemId;
-                _readyPreviewItemId = null;
-                _previewTextureSettleTicks = PreviewTextureSettleTicks;
-                _previewTextureWaitTicks = 0;
-                SetPreviewState("Rendering 3D preview...");
-                NotifyPreviewChanged();
-            }
-            catch (Exception)
-            {
-                SchedulePreviewRetryOrReportFailure();
-            }
-        }
-
-        private void SchedulePreviewRetryOrReportFailure()
-        {
-            _openedPreviewItemId = null;
-            _readyPreviewItemId = null;
-            _previewTextureSettleTicks = 0;
-            _previewTextureWaitTicks = 0;
-            ClearNativePreviewTableau();
-
-            if (_previewOpenAttempt < MaxPreviewOpenAttempts)
-            {
-                _previewOpenDelayTicks = PreviewOpenDelayTicks;
-                SetPreviewState("Retrying 3D preview...");
-                NotifyPreviewChanged();
-                return;
-            }
-
-            SetPreviewState("3D preview is temporarily unavailable.");
-            NotifyPreviewChanged();
         }
 
         private void PreparePreviewSession()
         {
-            ResetPreviewTracking();
-            CloseAndClearNativePreview();
-            SetPreviewState("Choose an equipment slot to preview it in 3D.");
-            NotifyPreviewChanged();
+            _previewSession.Prepare("Choose an equipment slot to preview it in 3D.");
         }
 
         private void ReleasePreviewSession()
         {
-            ResetPreviewTracking();
-            CloseAndClearNativePreview();
-            SetPreviewState("Preview is closed.");
-            NotifyPreviewChanged();
+            _previewSession.Release("Preview is closed.");
         }
 
-        private void ResetPreviewTracking()
+        private bool CanRetryPreviewAfterClose()
         {
-            _requestedPreviewItemId = null;
-            _openedPreviewItemId = null;
-            _readyPreviewItemId = null;
-            _previewOpenDelayTicks = 0;
-            _previewOpenAttempt = 0;
-            _previewTextureSettleTicks = 0;
-            _previewTextureWaitTicks = 0;
+            return IsWindowOpen;
         }
 
-        private void CloseAndClearNativePreview()
+        private void NotifyPreviewStateChanged()
         {
-            if (_itemPreview == null)
-                return;
-
-            _isReleasingPreview = true;
-            try
-            {
-                if (_itemPreview.IsSelected)
-                    _itemPreview.Close();
-                ClearNativePreviewTableau();
-            }
-            finally
-            {
-                _isReleasingPreview = false;
-            }
-        }
-
-        private void ClearNativePreviewTableau()
-        {
-            if (_itemPreview?.ItemTableau != null)
-                _itemPreview.ItemTableau.StringId = string.Empty;
-        }
-
-        private void OnItemPreviewClosed()
-        {
-            _openedPreviewItemId = null;
-            _readyPreviewItemId = null;
-            _previewTextureSettleTicks = 0;
-            _previewTextureWaitTicks = 0;
-            NotifyPreviewChanged();
-
-            if (_isReleasingPreview || !IsWindowOpen || string.IsNullOrEmpty(_requestedPreviewItemId))
-                return;
-
-            _previewOpenAttempt = 0;
-            _previewOpenDelayTicks = PreviewOpenDelayTicks;
-            SetPreviewState("Reinitializing 3D preview...");
-        }
-
-        private void SetPreviewState(string state)
-        {
-            if (string.Equals(_previewStateText, state, StringComparison.Ordinal))
-                return;
-
-            _previewStateText = state;
             OnPropertyChanged(nameof(PreviewStateText));
         }
 
@@ -722,19 +543,7 @@ namespace CompanionGearUpgrades.UI
         public override void OnFinalize()
         {
             ReleasePreviewSession();
-            if (_itemPreview != null)
-            {
-                _isReleasingPreview = true;
-                try
-                {
-                    _itemPreview.OnFinalize();
-                }
-                finally
-                {
-                    _isReleasingPreview = false;
-                    _itemPreview = null;
-                }
-            }
+            _previewSession.FinalizeSession();
 
             base.OnFinalize();
         }

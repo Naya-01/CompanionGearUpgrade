@@ -122,6 +122,7 @@
     <Compile Include="UI\ApplyGearPresetViewModel.cs" />
     <Compile Include="UI\EquipmentConfigGlobalLayer.cs" />
     <Compile Include="UI\EquipmentConfigView.cs" />
+    <Compile Include="UI\ItemPreviewSession.cs" />
     <Compile Include="UI\GearPresetConfigTypes.cs" />
     <Compile Include="UI\GearPresetConfigViewModel.Formatting.cs" />
     <Compile Include="UI\GearPresetConfigViewModel.Items.cs" />

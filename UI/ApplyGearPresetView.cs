@@ -37,8 +37,6 @@ namespace CompanionGearUpgrades.UI
             _service = service ?? throw new ArgumentNullException(nameof(service));
         }
 
-        public bool IsOpen => _viewModel != null && _viewModel.IsWindowOpen;
-
         public void Initialize()
         {
             if (_globalLayer != null)
@@ -70,9 +68,8 @@ namespace CompanionGearUpgrades.UI
         }
 
         /// <summary>
-        /// Queues the modal for the next Gauntlet tick. Deferring one tick
-        /// makes this safe to invoke from a dialogue consequence, after which
-        /// Bannerlord has finished its native option transition.
+        /// Queues the modal for the next Gauntlet tick, after the Clan screen
+        /// has completed the button command that opened it.
         /// </summary>
         public bool Open(Hero target)
         {
