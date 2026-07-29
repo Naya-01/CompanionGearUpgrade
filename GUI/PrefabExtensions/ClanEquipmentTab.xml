@@ -1,0 +1,11 @@
+<ButtonWidget Id="CGU_GearPresetsTab" DoNotPassEventsToChildren="true" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="176" SuggestedHeight="!Header.Tab.Right.Height.Scaled" Brush="Header.Tab.Right" Command.Click="SetSelectedCategory" CommandParameter.Click="4" IsVisible="true" IsEnabled="@CanSwitchTabs" UpdateChildrenStates="true">
+  <Children>
+    <ListPanel DoNotAcceptEvents="true" WidthSizePolicy="CoverChildren" HeightSizePolicy="StretchToParent" HorizontalAlignment="Center" VerticalAlignment="Center" StackLayout.LayoutMethod="HorizontalLeftToRight">
+      <Children>
+        <ImageWidget DoNotAcceptEvents="true" WidthSizePolicy="Fixed" HeightSizePolicy="Fixed" SuggestedWidth="20" SuggestedHeight="20" VerticalAlignment="Center" MarginRight="4" Brush="Inventory.Tuple.Extension.EquipButtonIcon" />
+        <TextWidget DoNotAcceptEvents="true" WidthSizePolicy="CoverChildren" HeightSizePolicy="StretchToParent" Brush="Clan.TabControl.Text" Text="Gear Presets" />
+      </Children>
+    </ListPanel>
+    <HintWidget DoNotAcceptEvents="true" DataSource="{GearPresetManagementHint}" WidthSizePolicy="StretchToParent" HeightSizePolicy="StretchToParent" Command.HoverBegin="ExecuteBeginHint" Command.HoverEnd="ExecuteEndHint" />
+  </Children>
+</ButtonWidget>
